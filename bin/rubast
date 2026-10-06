@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "optparse"
+require_relative "../lib/rubast"
+require_relative "../system/container"
+
+options = OptionParser.new do |parser|
+  parser.banner = "Usage: rubast run FILE.rb"
+  parser.on("-h", "--help", "Show help") do
+    puts parser
+    exit 0
+  end
+end
+
+begin
+  options.parse!
+  command, path = ARGV
+  unless command == "run" && path && ARGV.length == 2
+    warn options
+    exit 64
+  end
+
+  result = Rubast::Container["compiler"].call(path)
+  print result.stdout
+  warn result.stderr unless result.stderr.empty?
+  exit result.exitstatus
+rescue Rubast::CompilationError => error
+  warn error
+  exit 2
+end
