@@ -10,6 +10,10 @@ Rubast is a Ruby AOT compiler that generates Rust source and builds it with Carg
 - Keep state for each run in a fresh compilation context. Do not memoize stateful passes across compilations.
 - Ruby source semantics belong to the IR and analysis layers. Rust emission and Cargo execution are separate boundaries.
 
+## Language
+
+- Write project documentation, Cucumber features, and Cucumber step definitions in English.
+
 ## TDD
 
 - For new observable behavior, write or use a Cucumber `.feature` scenario before implementation. Run it to see the failure, implement the smallest behavior that makes it pass, then refactor.

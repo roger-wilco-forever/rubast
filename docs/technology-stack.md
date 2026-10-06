@@ -1,84 +1,83 @@
-# Технологический стек и границы Rubast
+# Rubast technology stack and component boundaries
 
-> Решение от 2026-10-06: компилятор пишется на Ruby; Prism — парсер; `dry-system` и Zeitwerk используются с начала для сборки и загрузки компонентов; разработка идёт через Cucumber-сценарии и RSpec; RuboCop обязателен в CI. Семантика поддерживаемого Ruby остаётся отдельным контрактом в [архитектуре](architecture.md).
+> Decision recorded on 2026-10-06: write the compiler in Ruby; use Prism as the parser and `dry-system` with Zeitwerk for component assembly and loading from the start. Development uses Cucumber and RSpec; RuboCop is required in CI. The semantics of supported Ruby remain a separate contract in the [architecture](architecture.md).
 
-## Что даёт dry-system
+## Why use dry-system
 
-[`dry-system`](https://hanakai.org/learn/dry/dry-system/v1.2) хранит регистрации компонентов, собирает зависимости, поддерживает автозагрузку и тестовую подмену. Мы используем его для **сборки сервисов компилятора**, а не как модель промежуточного представления или способ описывать каждый шаг алгоритма.
+[`dry-system`](https://hanakai.org/learn/dry/dry-system/v1.2) registers components, assembles dependencies, supports autoloading, and permits test substitution. We use it to **assemble compiler services**. The IR and individual algorithm steps are ordinary Ruby objects.
 
-Контейнер знает реализации и их ключи. Сервисы получают зависимости через конструктор и не обращаются к контейнеру из `#call`. Это позволит заменить адаптер Prism, способ запуска Cargo или backend, не переписывая проходы анализа. Ключи контейнера и контракты стадий считаем внутренним API проекта; их изменение требует отдельной миграции тестов.
+The container knows component implementations and keys. Services receive dependencies through constructors and do not access the container from `#call`. This lets us replace the Prism adapter, Cargo execution, or backend without rewriting analysis passes. Container keys and stage contracts are internal project APIs; changing them requires updating their tests deliberately.
 
-## Поток компиляции
+## Compilation flow
 
 ```text
 CLI
   → Compiler
   → SourceReader → PrismParser → Normalizer → Validator/Analyzer
   → RustEmitter → GeneratedProject
-  → CargoRunner (только build/run)
+  → CargoRunner (build/run only)
 ```
 
-Целевой контракт: каждый вызов `Compiler#call(request)` создаёт свой `CompilationContext`: исходный файл, настройки, таблицы имён, диагностики и временные данные. Контейнер не хранит состояние конкретной компиляции. Сервисы без изменяемого состояния могут переиспользоваться; анализатор с рабочими таблицами создаётся заново на каждый запуск либо получает все таблицы через контекст. Решение о memoization принимаем для каждого компонента явно.
+Target contract: each `Compiler#call(request)` gets a separate `CompilationContext` containing the source file, options, name tables, diagnostics, and temporary data. The container holds no per-compilation state. Stateless services may be reused. An analyzer with working tables is created for each run or receives those tables through the context. Memoization is a decision for each component.
 
-| Стадия | Вход | Выход |
+| Stage | Input | Output |
 | --- | --- | --- |
-| SourceReader | Путь и опции | `Source` с байтами и именем файла |
-| PrismParser | `Source` | AST Prism или диагностические ошибки |
-| Normalizer | AST Prism | Небольшое синтаксическое IR и `SourceSpan` |
-| Validator/Analyzer | Синтаксическое IR | Проверенное семантическое IR |
-| RustEmitter | Проверенное IR | Файлы Rust, Cargo manifest, карта исходников |
-| CargoRunner | Готовый проект | Путь к бинарнику, stdout/stderr и код выхода |
+| SourceReader | Path and options | `SourceFile` with bytes and file path |
+| PrismParser | `SourceFile` | Prism AST or parse diagnostics |
+| Normalizer | Prism AST | Small syntax IR with `SourceSpan` |
+| Validator/Analyzer | Syntax IR | Validated semantic IR |
+| RustEmitter | Validated IR | Rust files, Cargo manifest, source map |
+| CargoRunner | Generated project | Binary path, stdout/stderr, and exit status |
 
-Ожидаемые ошибки пользователя представляем структурированной диагностикой с кодом и Ruby-диапазоном. Неожиданные нарушения инвариантов остаются внутренними ошибками компилятора. Компилятор прекращает переход к следующей стадии, если текущая не вернула корректный результат; частичный Rust-код не объявляется успешной сборкой.
+Expected user errors become structured diagnostics with codes and Ruby spans. Unexpected broken invariants remain internal compiler errors. A stage cannot proceed after its predecessor fails; partially translated Rust must never be presented as a successful build.
 
-## Правила контейнера
+## Container rules
 
-- `Rubast::Container < Dry::System::Container` живёт в `system/container.rb`, `Rubast::Import = Rubast::Container.injector` — в `system/import.rb`. Контейнер настраивает `use :zeitwerk` и каталоги компонентов.
-- Автоматически регистрируются только сервисы из `app/`; узлы IR, диагностики и значения запроса лежат в `lib/rubast/` вне регистрации. Для `app/` задаём корневое пространство констант `Rubast`, сохраняя ключи по путям: `source.reader`, `frontend.parser`, `frontend.normalizer`, `analysis.validator`, `backend.rust`, `build.cargo`, `compiler`. Например, `app/frontend/parser.rb` определяет `Rubast::Frontend::Parser`.
-- Внутри сервисов зависимости выражены параметрами конструктора. [Автоинъекция](https://hanakai.org/learn/dry/dry-system/v1.2/dependency-auto-injection) разрешена для верхнего слоя; алгоритмы стадий и IR не знают о контейнере.
-- [Providers](https://hanakai.org/learn/dry/dry-system/v1.2/providers) вводим для ресурсов с жизненным циклом `prepare/start/stop`. Обычный запуск `cargo` — вызов адаптера, а не долгоживущий provider.
-- Для каждого компонента явно выбираем memoization. Сервисы со состоянием компиляции не разделяются между запусками.
-- В интеграционных тестах подменяем внешние адаптеры через [test mode](https://hanakai.org/learn/dry/dry-system/v1.2/test-mode); проходы проверяем напрямую, без контейнера.
+- `Rubast::Container < Dry::System::Container` lives in `system/container.rb`. `Rubast::Import = Rubast::Container.injector` lives in `system/import.rb`. The container configures `use :zeitwerk` and component directories.
+- Only services under `app/` are auto-registered. IR nodes, diagnostics, and request values live under `lib/rubast/` outside the container. The `app/` root constant namespace is `Rubast`, while keys follow paths: `source.reader`, `frontend.parser`, `frontend.normalizer`, `analysis.validator`, `backend.rust`, `build.cargo`, and `compiler`. For example, `app/frontend/parser.rb` defines `Rubast::Frontend::Parser`.
+- Services express dependencies through constructors. [Auto-injection](https://hanakai.org/learn/dry/dry-system/v1.2/dependency-auto-injection) is allowed at the orchestration layer; stage algorithms and IR do not know about the container.
+- Introduce [providers](https://hanakai.org/learn/dry/dry-system/v1.2/providers) for resources with a `prepare/start/stop` lifecycle. An ordinary `cargo` invocation is an adapter call, not a long-lived provider.
+- Choose memoization explicitly for each component. Never share mutable per-compilation state between runs.
+- Integration tests can substitute external adapters through [test mode](https://hanakai.org/learn/dry/dry-system/v1.2/test-mode). Test passes directly without the container.
 
-## Размещение кода
+## Code placement
 
 ```text
 bin/rubast                     # CLI
-system/container.rb            # dry-system, Zeitwerk, component dirs
+system/container.rb            # dry-system, Zeitwerk, component directories
 system/import.rb               # Rubast::Import
-app/compiler.rb                # оркестрация одного вызова
-app/frontend/                  # Prism adapter и нормализация
-app/analysis/                  # проверка подмножества и анализ
-app/backend/                   # генерация Rust и Cargo manifest
-app/build/                     # запуск Cargo
-lib/rubast/ir/                 # узлы и SourceSpan, вне контейнера
-lib/rubast/diagnostics/        # диагностические значения
-runtime/rubast_runtime/        # Rust crate для выходной программы
-features/                      # Cucumber, внешнее поведение компилятора
-spec/                          # RSpec, проходы и wiring
+app/compiler.rb                # orchestration of one compilation
+app/frontend/                  # Prism adapter and normalization
+app/analysis/                  # subset validation and analysis
+app/backend/                   # Rust and Cargo manifest generation
+app/build/                     # Cargo execution
+lib/rubast/                    # IR, spans, and diagnostics outside the container
+runtime/rubast_runtime/        # Rust crate linked into output programs
+features/                      # Cucumber acceptance behavior
+spec/                          # RSpec passes and container wiring
 ```
 
-Эта структура задаёт направление зависимостей: `compiler → stages → IR`; адаптеры реализуют внешние операции. IR не импортирует контейнер, CLI, Prism и Cargo. Rust runtime не зависит от Ruby-компилятора; при генерации проекта его нужная версия включается в выходной Cargo workspace.
+Dependencies flow from `compiler → stages → IR`. Adapters perform external operations. IR imports neither the container nor the CLI, Prism, or Cargo. The Rust runtime does not depend on the Ruby compiler; generated projects include the required runtime version.
 
-## Остальной стек
+## Other technology choices
 
-| Область | Выбор |
+| Area | Choice |
 | --- | --- |
-| Ruby | CRuby 3.4 для первой цели совместимости; CRuby 3.4.5 в `.ruby-version`, Prism 1.9.0 и остальные gem в `Gemfile.lock` |
-| Парсер | [Prism Ruby API](https://ruby.github.io/prism/rb/docs/ruby_api_md.html) |
-| Упаковка | Ruby gem, gemspec и Bundler |
+| Ruby | CRuby 3.4 is the first compatibility target; CRuby 3.4.5 is pinned in `.ruby-version`, Prism 1.9.0 and other gems in `Gemfile.lock` |
+| Parser | [Prism Ruby API](https://ruby.github.io/prism/rb/docs/ruby_api_md.html) |
+| Packaging | Ruby gem, gemspec, and Bundler |
 | CLI | [OptionParser](https://docs.ruby-lang.org/en/3.4/OptionParser.html) |
-| IR и диагностики | `Data.define` и собственные классы; вложенные коллекции замораживать отдельно ([Ruby Data](https://docs.ruby-lang.org/en/3.4/Data.html)) |
-| Внешние команды | `Open3` с аргументами без shell-интерполяции ([Ruby Open3](https://docs.ruby-lang.org/en/3.4/Open3.html)) |
-| Выход | Rust source + `rubast_runtime`, сборка [Cargo](https://doc.rust-lang.org/cargo/) |
-| Проверки | RuboCop для Ruby-кода; Cucumber для поведения CLI; RSpec для проходов и wiring; `cargo fmt --check` и `cargo test` для runtime; сравнение программ с закреплённым CRuby |
+| IR and diagnostics | `Data.define` and project-owned classes; freeze nested collections separately ([Ruby Data](https://docs.ruby-lang.org/en/3.4/Data.html)) |
+| External commands | `Open3` with argument arrays, without shell interpolation ([Ruby Open3](https://docs.ruby-lang.org/en/3.4/Open3.html)) |
+| Output | Rust source plus `rubast_runtime`, built with [Cargo](https://doc.rust-lang.org/cargo/) |
+| Checks | RuboCop for Ruby; Cucumber for CLI behavior; RSpec for passes and wiring; `cargo fmt --check` and `cargo test` for the runtime; differential checks against pinned CRuby |
 
-`dry-struct`, `dry-types` и `dry-monads` не входят в стартовые зависимости: выбор `dry-system` не требует использовать весь набор dry-rb. Схема ошибок и форма IR принадлежат компилятору. Дополнительные библиотеки добавляем под проверенный сценарий.
+`dry-struct`, `dry-types`, and `dry-monads` are not initial dependencies. Choosing `dry-system` does not require the rest of dry-rb. The compiler owns its error schema and IR shape. Add libraries when a tested scenario needs them.
 
-## TDD для компилятора
+## TDD for the compiler
 
-Работа начинается с Cucumber-сценария в `features/`: исходный Ruby, команда Rubast, ожидаемый вывод/код выхода или диагностический код. Сначала запускаем сценарий и видим красный результат, затем пишем минимальную реализацию и локальные RSpec-примеры для соответствующего прохода, добиваемся зелёного результата и только потом упрощаем код. Принятый сценарий не ослабляем ради прохождения теста. Для Rubast шаги сценариев работают с Ruby-файлами и CLI, без HTTP и базы данных.
+Start with a Cucumber scenario under `features/`: Ruby source, a Rubast command, and expected output, exit status, or diagnostic code. Run the scenario and observe the failure. Implement the smallest behavior, add focused RSpec examples for the relevant pass, get the scenario green, and then simplify the code. Never weaken an accepted scenario just to make it pass. Rubast steps operate on Ruby files and the CLI.
 
-Для поддерживаемой программы Cucumber запускает её под закреплённым CRuby и через Rubast в изолированных временных каталогах, сравнивая stdout, stderr и код выхода. Для неподдерживаемой программы проверяет диагностический код и Ruby-локацию без вызова Cargo. RSpec проверяет нормализацию, анализ и генерацию на малых входах; отдельный wiring spec проверяет ключи контейнера и подмену CargoRunner. Rust runtime проверяется `cargo test`. Локальные команды: `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, `cargo fmt --manifest-path runtime/rubast_runtime/Cargo.toml --check` и `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. GitHub Actions запускает их на каждом push и pull request.
+For a supported program, Cucumber runs the same file under pinned CRuby and Rubast in isolated temporary directories and compares stdout, stderr, and exit status. For an unsupported program, check the diagnostic code and Ruby location without invoking Cargo. RSpec checks normalization, analysis, and generation on small inputs; a wiring spec checks container keys and can substitute the Cargo runner. Run the Rust runtime checks with `cargo test`. Local commands are `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, `cargo fmt --manifest-path runtime/rubast_runtime/Cargo.toml --check`, and `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. GitHub Actions runs them on every push and pull request.
 
-Первые сценарии реализованы: `puts 42`, границы знакового 64-битного целого, отказ для неподдерживаемой конструкции и блока, ошибка разбора. Они проверяют путь CLI → Prism → IR → Rust → Cargo и остановку при диагностике. Текущий `SourceFile` хранит байты и путь; `CompilationContext`, полные `SourceSpan`, карта исходников и раздельные команды `emit-rust`/`build` остаются дальнейшими шагами.
+The first scenarios are implemented: `puts 42`, signed 64-bit integer boundaries, unsupported constructs and blocks, and a parse error. They exercise CLI → Prism → IR → Rust → Cargo and stop compilation on diagnostics. The current `SourceFile` contains bytes and a path. `CompilationContext`, full `SourceSpan` values, a source map, and separate `emit-rust`/`build` commands remain future work.

@@ -1,54 +1,54 @@
-# language: ru
-Функционал: Первый срез компиляции Ruby в Rust
-  Чтобы проверить весь путь от Ruby до исполняемой программы
-  Я хочу запускать поддерживаемый код через Rubast
+# language: en
+Feature: First Ruby-to-Rust compilation slice
+  To verify the path from Ruby source to an executable
+  As a Rubast developer
+  I want to run supported programs through Rubast
 
-  Сценарий: Вывод целого числа
-    Допустим исходный Ruby-код:
+  Scenario: Print an integer
+    Given the Ruby source is:
       """
       puts 42
       """
-    Когда я запускаю Rubast
-    Тогда вывод и код завершения совпадают с CRuby
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
-  Сценарий: Неподдерживаемая конструкция даёт диагностику
-    Допустим исходный Ruby-код:
+  Scenario: Report an unsupported construct
+    Given the Ruby source is:
       """
       class Greeter; end
       """
-    Когда я запускаю Rubast
-    Тогда ошибка содержит код "E_UNSUPPORTED" и строку 1
+    When I run Rubast
+    Then the diagnostic has code "E_UNSUPPORTED" at line 1
 
-
-  Сценарий: Последовательность и границы 64-битных целых
-    Допустим исходный Ruby-код:
+  Scenario: Preserve statement order and 64-bit integer boundaries
+    Given the Ruby source is:
       """
       puts -9223372036854775808
       puts 9223372036854775807
       """
-    Когда я запускаю Rubast
-    Тогда вывод и код завершения совпадают с CRuby
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
-  Сценарий: Целое число за пределом текущего диапазона
-    Допустим исходный Ruby-код:
+  Scenario: Reject an integer outside the current range
+    Given the Ruby source is:
       """
       puts 9223372036854775808
       """
-    Когда я запускаю Rubast
-    Тогда ошибка содержит код "E_INTEGER_RANGE" и строку 1
+    When I run Rubast
+    Then the diagnostic has code "E_INTEGER_RANGE" at line 1
 
-  Сценарий: Неподдерживаемый блок не пропускается молча
-    Допустим исходный Ruby-код:
+  Scenario: Reject an unsupported block instead of silently dropping it
+    Given the Ruby source is:
       """
       puts(42) { puts 99 }
       """
-    Когда я запускаю Rubast
-    Тогда ошибка содержит код "E_UNSUPPORTED" и строку 1
+    When I run Rubast
+    Then the diagnostic has code "E_UNSUPPORTED" at line 1
 
-  Сценарий: Синтаксическая ошибка сохраняет место в Ruby
-    Допустим исходный Ruby-код:
+  Scenario: Preserve the Ruby location of a syntax error
+    Given the Ruby source is:
       """
       puts(
       """
-    Когда я запускаю Rubast
-    Тогда ошибка содержит код "E_PARSE" и строку 1
+    When I run Rubast
+    Then the diagnostic has code "E_PARSE" at line 1
