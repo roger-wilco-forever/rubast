@@ -28,9 +28,9 @@ module Rubast
           end
 
           executable = File.join(directory, "target", "debug", "rubast_program")
-          run_stdout, run_stderr, run_status = Open3.capture3(executable)
-          ExecutionResult.new(stdout: run_stdout, stderr: run_stderr,
-                              exitstatus: run_status.exitstatus)
+          pid = Process.spawn(executable, in: $stdin, out: $stdout, err: $stderr)
+          _finished_pid, status = Process.waitpid2(pid)
+          ExecutionResult.new(exitstatus: status.exitstatus || 1)
         end
       end
     end

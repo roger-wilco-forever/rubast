@@ -4,9 +4,11 @@
 
 ## Implementation status
 
-The first end-to-end slice works. `rubast run FILE.rb` accepts a sequence of `puts INTEGER` statements with signed 64-bit integers. Running under CRuby 3.4.5, it parses the file with Prism 1.9.0, builds a small IR, emits a Cargo project with a local Rust runtime, builds it, and runs the result in a temporary directory. Cucumber compares stdout, stderr, and exit status with CRuby. Unsupported syntax, parse errors, and out-of-range integers produce diagnostic codes with Ruby source locations. `dry-system` assembles the compiler stages.
+The first end-to-end slice now accepts a sequence of `puts` calls over supported values and top-level local assignments. Supported expressions include signed 64-bit integers, UTF-8 string literals, `gets`, safe `chomp` on strings or `nil`, local reads, and string interpolation with one supported expression per embedded section. [`examples/hello_user.rb`](../examples/hello_user.rb) prompts for a name, waits for stdin, and prints `Hello, #{user}!`. The generated program forwards stdin and streams stdout and stderr, so the prompt is visible before input arrives. The current input reader expects valid UTF-8.
 
-This is narrower than the planned MVP below. Variables, general expressions, strings, conditionals, and loops are not implemented. Only `run` is available. Diagnostics currently carry line and column positions, without byte ranges or a Ruby-to-Rust source map. There is no separate `CompilationContext` yet. These remain target contracts for later stages.
+Running under CRuby 3.4.5, Rubast parses the file with Prism 1.9.0, validates the subset, emits a Cargo project with a local Rust runtime, builds it, and runs the result in a temporary directory. Cucumber compares stdout, stderr, and exit status with CRuby, including Unicode input and EOF. Unsupported syntax, parse errors, invalid string encodings, and out-of-range integers produce diagnostics with Ruby source locations. `dry-system` assembles the compiler stages.
+
+This remains narrower than the planned MVP below. Conditionals, loops, user methods, general Ruby dispatch, and mutable objects are not implemented. Only `run` is available. Diagnostics currently carry line and column positions, without byte ranges or a Ruby-to-Rust source map. There is no separate `CompilationContext` yet. These remain target contracts for later stages.
 
 ## A closed program sets an honest compatibility boundary
 

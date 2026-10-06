@@ -52,3 +52,14 @@ Feature: First Ruby-to-Rust compilation slice
       """
     When I run Rubast
     Then the diagnostic has code "E_PARSE" at line 1
+
+
+  Scenario: Preserve string escapes and local reassignment
+    Given the Ruby source is:
+      """
+      name = "Ada"
+      name = "Zoë"
+      puts "Hello, \"#{name}\"!\\"
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

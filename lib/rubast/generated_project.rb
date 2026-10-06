@@ -2,5 +2,5 @@
 
 module Rubast
   GeneratedProject = Data.define(:files)
-  ExecutionResult = Data.define(:stdout, :stderr, :exitstatus)
+  ExecutionResult = Data.define(:exitstatus)
 end

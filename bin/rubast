@@ -22,8 +22,6 @@ begin
   end
 
   result = Rubast::Container["compiler"].call(path)
-  print result.stdout
-  warn result.stderr unless result.stderr.empty?
   exit result.exitstatus
 rescue Rubast::CompilationError => error
   warn error
