@@ -21,7 +21,7 @@ bundle exec ruby bin/rubast run example.rb
 # 42
 ```
 
-Run checks with `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, and `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The compiler currently exposes only `run`; the broader language subset and `emit-rust`/`build` commands are planned in [the architecture](docs/architecture.md).
+Run checks with `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, and `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. GitHub Actions runs all checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The compiler currently exposes only `run`; the broader language subset and `emit-rust`/`build` commands are planned in [the architecture](docs/architecture.md).
 
 See [the architecture and implementation plan](docs/architecture.md) and [proposed technology stack](docs/technology-stack.md). Both documents are currently in Russian.
 

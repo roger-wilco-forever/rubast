@@ -7,7 +7,9 @@ require "tmpdir"
 require "rspec/expectations"
 
 expected_ruby = File.read(File.expand_path("../../.ruby-version", __dir__)).strip
-abort "Rubast features require CRuby #{expected_ruby}, got #{RUBY_VERSION}" unless RUBY_ENGINE == "ruby" && RUBY_VERSION == expected_ruby
+unless RUBY_ENGINE == "ruby" && expected_ruby == RUBY_VERSION
+  abort "Rubast features require CRuby #{expected_ruby}, got #{RUBY_VERSION}"
+end
 
 World(RSpec::Matchers)
 

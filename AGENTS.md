@@ -17,4 +17,4 @@ Rubast is a Ruby AOT compiler that generates Rust source and builds it with Carg
 - Use RSpec for local pass behavior and container wiring. Use differential scenarios against a pinned CRuby for supported programs and diagnostic scenarios for unsupported programs.
 - Run the relevant scenario/spec during development and the full suite before declaring behavior complete. Documentation-only edits do not need new tests.
 
-Run `bundle exec cucumber --publish-quiet` and `bundle exec rspec` for Ruby changes. Run `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml` for Rust runtime changes. The current supported input is one file with `puts INTEGER` statements, with signed 64-bit integers.
+Run `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, and `bundle exec rspec` for Ruby changes. RuboCop is required in GitHub Actions CI. Run `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml` for Rust runtime changes. The current supported input is one file with `puts INTEGER` statements, with signed 64-bit integers.

@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      - name: RuboCop
+        run: bundle exec rubocop
+      - name: RSpec
+        run: bundle exec rspec
+      - name: Cucumber
+        run: bundle exec cucumber --publish-quiet
+      - name: Rust formatting
+        run: cargo fmt --manifest-path runtime/rubast_runtime/Cargo.toml --check
+      - name: Rust runtime
+        run: cargo test --manifest-path runtime/rubast_runtime/Cargo.toml
