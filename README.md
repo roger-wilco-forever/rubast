@@ -10,7 +10,7 @@ The proposed pipeline is:
 Ruby source → Prism (Ruby API) → semantic IR (Ruby) → generated Rust + Rust runtime → Cargo binary
 ```
 
-Ruby and Prism are needed to run the compiler. The compiled program uses the Rust runtime linked into its binary.
+Ruby and Prism are needed to run the compiler. Its Ruby services are assembled with `dry-system`. The compiled program uses the Rust runtime linked into its binary.
 
 The first milestone targets a documented subset of single-file Ruby programs. Each supported behavior will be checked against a pinned CRuby version. Unsupported constructs should produce a diagnostic tied to the Ruby source instead of silently changing the program.
 
