@@ -32,8 +32,8 @@ Hello, Ada!
 
 The prompt is flushed before the program waits for input. An EOF produces `Hello, !`, matching CRuby for `gets&.chomp`. The current input reader expects valid UTF-8.
 
-Run checks with `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, and `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. GitHub Actions runs all checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The compiler currently exposes only `run`; the broader language subset and `emit-rust`/`build` commands are planned in [the architecture](docs/architecture.md).
+Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The compiler currently exposes only `run`; the broader language subset and `emit-rust`/`build` commands are planned in [the architecture](docs/architecture.md).
 
-See [the architecture and implementation plan](docs/architecture.md) and [proposed technology stack](docs/technology-stack.md). Documentation and Cucumber scenarios are written in English.
+See [the architecture and implementation plan](docs/architecture.md), [proposed technology stack](docs/technology-stack.md), and [contributor and agent development guide](docs/development.md). Documentation and Cucumber scenarios are written in English.
 
 No license has been selected yet.

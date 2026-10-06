@@ -1,4 +1,5 @@
 /target/
+/runtime/rubast_runtime/target/
 /research_notes/
 /reports/
 .DS_Store

@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+cd "$(dirname "$0")/.."
+
+printf '%s\n' '==> RuboCop'
+bundle exec rubocop
+
+printf '%s\n' '==> RSpec'
+bundle exec rspec
+
+printf '%s\n' '==> Cucumber'
+bundle exec cucumber --publish-quiet
+
+printf '%s\n' '==> Rust formatting'
+cargo fmt --manifest-path runtime/rubast_runtime/Cargo.toml --check
+
+printf '%s\n' '==> Cargo tests'
+cargo test --manifest-path runtime/rubast_runtime/Cargo.toml
