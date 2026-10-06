@@ -14,6 +14,6 @@ Ruby and Prism are needed to run the compiler. The compiled program uses the Rus
 
 The first milestone targets a documented subset of single-file Ruby programs. Each supported behavior will be checked against a pinned CRuby version. Unsupported constructs should produce a diagnostic tied to the Ruby source instead of silently changing the program.
 
-See [the architecture and implementation plan](docs/architecture.md) for the proposed components, MVP scope, milestones, and open decisions. That document is currently in Russian.
+See [the architecture and implementation plan](docs/architecture.md) and [proposed technology stack](docs/technology-stack.md). Both documents are currently in Russian.
 
 No license has been selected yet.
