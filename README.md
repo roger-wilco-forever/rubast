@@ -32,6 +32,17 @@ Hello, Ada!
 
 The prompt is flushed before the program waits for input. An EOF produces `Hello, !`, matching CRuby for `gets&.chomp`. The current input reader expects valid UTF-8.
 
+To keep and inspect the generated Rust, emit a standalone Cargo project into a new or empty directory:
+
+```sh
+bundle exec ruby bin/rubast emit-rust examples/greeter.rb -o target/greeter
+# generated source: target/greeter/src/main.rs
+cargo build --manifest-path target/greeter/Cargo.toml
+target/greeter/target/debug/rubast_program
+```
+
+`emit-rust` does not invoke Cargo or execute the Ruby program. The output includes `Cargo.toml`, `src/main.rs`, and the runtime source; runtime build caches are excluded. Existing nonempty destinations are rejected with `E_OUTPUT`. Compiler and output errors exit with status 2; invalid command usage exits with status 64. `run` continues to build and execute in a temporary directory that is removed afterward.
+
 User classes support `Class.new` without arguments and instance methods with required positional scalar arguments. Each method has one expression as its body; its value is returned. See [the class example](examples/greeter.rb):
 
 ```ruby
@@ -45,7 +56,7 @@ puts Greeter.new.greet("Ada")
 
 Classes must be defined before use and contain at least one method. Empty classes, reopening classes or existing Ruby constants, inheritance, `initialize`, instance variables, singleton methods, implicit instance calls, `self`, explicit `return`, and optional/keyword/block parameters are unsupported. Methods cannot receive or return objects; object printing and interpolation are unsupported. Parameter values may be returned or interpolated, but parameter-dependent operations such as `name&.chomp` inside a method are not yet analyzed. Unsupported forms retain `E_UNSUPPORTED` and a Ruby location.
 
-Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI currently exposes only `run`; a separate `build` command and the broader language subset remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
+Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run` and `emit-rust`; a separate `build` command and the broader language subset remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
 
 See [the architecture and implementation plan](docs/architecture.md), [proposed technology stack](docs/technology-stack.md), and [contributor and agent development guide](docs/development.md). Documentation and Cucumber scenarios are written in English.
 

@@ -5,8 +5,10 @@ require "optparse"
 require_relative "../lib/rubast"
 require_relative "../system/container"
 
+output_directory = nil
 options = OptionParser.new do |parser|
-  parser.banner = "Usage: rubast run FILE.rb"
+  parser.banner = "Usage: rubast run FILE.rb\n       rubast emit-rust FILE.rb -o DIR"
+  parser.on("-o", "--output DIR", "Save the generated project (emit-rust only)") { |dir| output_directory = dir }
   parser.on("-h", "--help", "Show help") do
     puts parser
     exit 0
@@ -16,13 +18,23 @@ end
 begin
   options.parse!
   command, path = ARGV
-  unless command == "run" && path && ARGV.length == 2
+  valid_command = (command == "run" && output_directory.nil?) ||
+                  (command == "emit-rust" && output_directory && !output_directory.empty?)
+  unless valid_command && path && ARGV.length == 2
     warn options
     exit 64
   end
 
-  result = Rubast::Container["compiler"].call(path)
-  exit result.exitstatus
+  compiler = Rubast::Container["compiler"]
+  if command == "emit-rust"
+    compiler.emit(path, output_directory)
+    exit 0
+  end
+  exit compiler.call(path).exitstatus
+rescue OptionParser::ParseError => error
+  warn error
+  warn options
+  exit 64
 rescue Rubast::CompilationError => error
   warn error
   exit 2

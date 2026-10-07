@@ -36,12 +36,13 @@ end
 Greeter.new("Ada").greet
 ```
 
-### 1. Inspectable generated projects — planned
+### 1. Inspectable generated projects — complete (2026-10-06)
 
 Add `emit-rust FILE -o DIR`, preserving generated Rust, a Cargo manifest, and the runtime in a chosen directory. Reuse the existing pipeline through `GeneratedProject`; share project writing with `run`. Reject nonempty destinations rather than overwriting files. Do not copy runtime build caches.
 
 **Acceptance:** the saved project builds independently with Cargo and its binary matches both CRuby and `run`, including stdin and EOF. Invalid Ruby leaves no output project. Existing destination files are preserved. CLI usage and output errors have deliberate exit statuses.
 
+**Delivered:** `emit-rust FILE -o DIR`, shared `build.writer`, standalone runtime source without build caches, and `E_OUTPUT` for destination errors. [Emission scenarios](../features/emit_rust.feature) cover independent execution, stdin/EOF, directories with spaces, empty/nonempty destinations, filesystem failures, emission without Cargo, and CLI misuse. `bin/verify` passed: RuboCop, 2 RSpec examples, 43 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
 ### 2. Multi-expression method bodies — planned
 
@@ -158,4 +159,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 1 with the saved-project emission command and its acceptance scenarios. Keep later milestones planned until implementation and executed checks establish their behavior.
+Begin stage 2 with a differential scenario for a multi-expression method that assigns a local, prints a value, and returns its final expression. Keep later milestones planned until implementation and executed checks establish their behavior.

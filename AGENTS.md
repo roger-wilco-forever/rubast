@@ -13,7 +13,7 @@ Rubast is a Ruby-written AOT compiler for a documented Ruby subset. It uses Pris
 | Choose the owning file and verification | [docs/development.md](docs/development.md) |
 | See executable behavior examples | [features/](features/) and [examples/](examples/) |
 
-Current pipeline: source bytes → Prism AST → normalized IR → validation → Rust source and runtime → Cargo binary. The CLI exposes only `run`. signed 64-bit integers, UTF-8 strings, top-level locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes form the current subset. Other constructs described in the architecture may still be proposals.
+Current pipeline: source bytes → Prism AST → normalized IR → validation → Rust source and runtime → Cargo binary. The CLI exposes `run` and `emit-rust FILE -o DIR`. signed 64-bit integers, UTF-8 strings, top-level locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes form the current subset. Other constructs described in the architecture may still be proposals.
 
 ## Invariants
 

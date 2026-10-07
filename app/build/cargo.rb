@@ -1,22 +1,17 @@
 # frozen_string_literal: true
 
-require "fileutils"
 require "open3"
 require "tmpdir"
+require_relative "../../system/import"
 
 module Rubast
   module Build
     class Cargo
-      RUNTIME_PATH = File.expand_path("../../runtime/rubast_runtime", __dir__)
+      include Import["build.writer"]
 
       def call(project)
         Dir.mktmpdir("rubast-build-") do |directory|
-          project.files.each do |name, content|
-            path = File.join(directory, name)
-            FileUtils.mkdir_p(File.dirname(path))
-            File.write(path, content)
-          end
-          FileUtils.cp_r(RUNTIME_PATH, File.join(directory, "rubast_runtime"))
+          writer.call(project, directory)
 
           stdout, stderr, status = Open3.capture3("cargo", "build", "--quiet", chdir: directory)
           unless status.success?

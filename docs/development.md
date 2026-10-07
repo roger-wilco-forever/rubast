@@ -10,7 +10,7 @@ Use the Ruby version in [`.ruby-version`](../.ruby-version), Bundler, and Rust w
 bundle exec ruby bin/rubast run examples/hello_user.rb
 ```
 
-The CLI currently supports `run` only. Read [features/first_program.feature](../features/first_program.feature) and [features/hello_user.feature](../features/hello_user.feature) for executable examples. Treat their observed behavior and the current implementation as the live support claim. Architectural milestones describe intended behavior.
+The CLI supports `run` and `emit-rust FILE -o DIR`. Use `emit-rust` to retain a Cargo project in a new or empty directory for source inspection and independent builds. See [the roadmap](roadmap.md) for the implementation order. Read [features/first_program.feature](../features/first_program.feature) and [features/hello_user.feature](../features/hello_user.feature) for executable examples. Treat their observed behavior and the current implementation as the live support claim. Architectural milestones describe intended behavior.
 
 ## Ownership map
 
@@ -22,6 +22,7 @@ The CLI currently supports `run` only. Read [features/first_program.feature](../
 | Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb) |
 | Generated Rust and Cargo manifest | [`app/backend/rust.rb`](../app/backend/rust.rb), [`lib/rubast/generated_project.rb`](../lib/rubast/generated_project.rb) |
 | Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs) |
+| Project files and runtime copying | [`app/build/writer.rb`](../app/build/writer.rb) |
 | Cargo execution | [`app/build/cargo.rb`](../app/build/cargo.rb) |
 | Stage wiring | [`app/compiler.rb`](../app/compiler.rb), [`system/container.rb`](../system/container.rb) |
 | End-to-end behavior and diagnostics | [`features/`](../features/), [`features/step_definitions/compiler_steps.rb`](../features/step_definitions/compiler_steps.rb) |
@@ -50,7 +51,7 @@ Removing a diagnostic is a support claim. Use an example that distinguishes corr
 5. Update the current-subset wording in [README.md](../README.md), [architecture.md](architecture.md), and [AGENTS.md](../AGENTS.md) if support changes. Report actual checks and any untested boundary.
 
 ```sh
-bundle exec cucumber --publish-quiet features/hello_user.feature
+bundle exec cucumber --publish-quiet features/hello_user.feature features/emit_rust.feature
 bundle exec rspec spec/system/container_spec.rb
 bin/verify
 ```

@@ -12,5 +12,6 @@ RSpec.describe Rubast::Container do
     expect(described_class["analysis.validator"]).to be_a(Rubast::Analysis::Validator)
     expect(described_class["backend.rust"]).to be_a(Rubast::Backend::Rust)
     expect(described_class["build.cargo"]).to be_a(Rubast::Build::Cargo)
+    expect(described_class["build.writer"]).to be_a(Rubast::Build::Writer)
   end
 end
