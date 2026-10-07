@@ -1,6 +1,8 @@
 AllCops:
   TargetRubyVersion: 3.4
   NewCops: enable
+  Exclude:
+    - "target/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

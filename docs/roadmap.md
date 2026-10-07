@@ -154,6 +154,8 @@ Add `build`, a persistent binary destination, and a release mode. Extend Ruby-to
 
 ### 18. Measured optimization — planned
 
+An early [synthetic baseline](benchmarks.md) measures the current stage-5 subset before optimization. It does not complete this milestone or change the implementation order.
+
 Choose real benchmark programs and measure compilation time, startup, runtime, memory, and binary size. Add call specialization, reduced cloning, and Cargo build reuse only for observed bottlenecks.
 
 **Acceptance:** an optimization improves a named benchmark and keeps semantic checks green. Record measurement conditions and before/after results; avoid speculative caches or optimization passes.

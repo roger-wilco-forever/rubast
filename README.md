@@ -87,4 +87,15 @@ Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust 
 
 See [the architecture and implementation plan](docs/architecture.md), [proposed technology stack](docs/technology-stack.md), and [contributor and agent development guide](docs/development.md). Documentation and Cucumber scenarios are written in English.
 
+## Preliminary benchmarks
+
+The [synthetic baseline](docs/benchmarks.md) compares CRuby with emitted release binaries on arithmetic, conditions, method calls, instance fields, and strings. It records process execution time, peak RSS, separate generation/build costs, and raw samples. These measurements establish whether the current AOT approach improves repeated process runs and where further work is justified.
+
+```sh
+python3 benchmarks/synthetic.py
+# generated Ruby, Cargo projects, and raw measurements: target/synthetic-benchmark/
+```
+
+The runner requires Python 3 and Linux with GNU `/usr/bin/time`, in addition to the compiler toolchain. The output directory must not exist. Each workload's output, errors, and exit status must match CRuby before timing. Compiler checks should run separately from benchmarks to avoid competing load. See the report for measurement conditions and the limits of startup-heavy, unrolled workloads.
+
 No license has been selected yet.
