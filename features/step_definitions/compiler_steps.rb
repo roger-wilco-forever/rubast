@@ -130,3 +130,8 @@ Then("I see the greeting {string}") do |greeting|
     expect(@interactive_wait.value.exitstatus).to eq(0)
   end
 end
+
+Then("the emitted Rust defines {int} receiver functions") do |count|
+  source = File.read(File.join(@output_path, "src/main.rs"))
+  expect(source.scan(/^fn method_\d+\(runtime: &mut Runtime, receiver: Value/).length).to eq(count)
+end

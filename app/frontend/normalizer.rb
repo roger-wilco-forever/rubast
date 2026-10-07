@@ -4,8 +4,7 @@ module Rubast
   module Frontend
     class Normalizer
       def call(ast, source)
-        statements = ast.statements&.body || []
-        IR::Program.new(statements: statements.map { |node| normalize(node, source) }.freeze)
+        IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze)
       end
 
       private
@@ -16,7 +15,7 @@ module Rubast
         when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
-             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode
+             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode
           normalize_variable(node, source)
         when Prism::InterpolatedStringNode
           IR::InterpolatedString.new(
@@ -76,6 +75,7 @@ module Rubast
 
       def normalize_variable(node, source)
         case node
+        when Prism::SelfNode then IR::SelfRead.new(result_type: nil, span: span(node, source))
         when Prism::InstanceVariableWriteNode
           IR::InstanceWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
         when Prism::InstanceVariableReadNode
@@ -95,6 +95,7 @@ module Rubast
       end
 
       def normalize_call(node, source)
+        unsupported(node, source) if node.attribute_write?
         unsupported(node.block, source) if node.block
 
         IR::Call.new(

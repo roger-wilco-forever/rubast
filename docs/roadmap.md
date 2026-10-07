@@ -4,7 +4,7 @@ Recorded on 2026-10-06. This is the agreed implementation order, not a claim tha
 
 ## Starting point
 
-The compiler supports `nil`, signed 64-bit integers, UTF-8 strings, top-level and method locals, `gets`, safe `chomp`, interpolation, `puts`, and user classes with constructors and scalar instance state. A class can be constructed with required positional scalar arguments when it defines `initialize`, or without arguments otherwise; instance methods have required positional scalar arguments and an expression-sequence body with local assignment, `puts`, and last-expression returns. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Unset instance variables read as `nil`; aliases share mutations, while separate instances have independent state. Inheritance and object-valued fields remain unsupported.
+The compiler supports `nil`, signed 64-bit integers, UTF-8 strings, top-level and method locals, `gets`, safe `chomp`, interpolation, `puts`, and user classes with constructors, scalar instance state, and nested instance calls. A class can be constructed with required positional scalar arguments when it defines `initialize`, or without arguments otherwise; instance methods have required positional scalar arguments and an expression-sequence body with local assignment, `puts`, and last-expression returns. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Unset instance variables read as `nil`; aliases share mutations, while separate instances have independent state. Explicit `self.method` and implicit helper calls use the current object; generated Rust shares one function per called class/method. Recursion, inheritance, and object-valued fields remain unsupported.
 
 ## Completion rule
 
@@ -60,11 +60,13 @@ Replace the stateless object tag with a shared object handle. Support `@variable
 
 **Delivered:** constructor invocation, scalar instance-variable reads and writes, and shared object handles backed by per-runtime field maps. Analysis shares field types across aliases and captures read types before later writes; generated temporaries preserve receiver, argument, read, and call-result evaluation order. Explicit calls to private `initialize`, wrong constructor arity, object-valued fields, and top-level instance variables remain diagnostics. Objects are retained until runtime teardown; arbitrary object graphs and reclamation remain later work. The [Greeter example](../examples/greeter.rb) now meets the first milestone. [Object-state scenarios](../features/object_state.feature) cover these behaviors, nested constructor/receiver context, and invalid operations after an alias changes a field type. `bin/verify` passed: RuboCop, 2 RSpec examples, 69 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
-### 4. Instance calls and `self` — planned
+### 4. Instance calls and `self` — complete (2026-10-07)
 
 Support explicit `self.method` and implicit calls to another method on the current receiver. Emit separate Rust functions with receiver and arguments instead of copying method bodies into each call site. Define visibility for constructor calls before exposing explicit `initialize` calls.
 
 **Acceptance:** nested calls use the same receiver, preserve state and evaluation order, and isolate method-local scopes. Unsupported lookup remains a diagnostic. Recursion is added only with a tested analysis strategy.
+
+**Delivered:** `self` IR, explicit and implicit current-receiver calls, and local aliases of `self`. Methods in a class are registered before their bodies are checked, allowing later-defined helpers. Implicit user methods shadow built-in `gets` and `puts`. Analysis still checks actual argument and field types at every call; Rust emits one function per called class/method with runtime, receiver, and scalar arguments. This fixed lookup relies on scalar arguments/fields; object-dependent dispatch remains later work. Direct and indirect recursive methods receive `E_UNSUPPORTED` at the Ruby call location, including in unused methods. `initialize` remains constructor-only; explicit/implicit calls to it are still rejected. Attribute/index assignment syntax is rejected because its expression result differs from an ordinary method call. The [Greeter example](../examples/greeter.rb) uses explicit and implicit helpers. [Instance-call scenarios](../features/instance_calls.feature) cover receiver state, local isolation, input order, type changes, generated-function reuse, and diagnostics before output is written. `bin/verify` passed: RuboCop, 2 RSpec examples, 92 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
 ### 5. Conditions, arithmetic, and returns — planned
 
@@ -162,4 +164,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 4 with differential scenarios for explicit `self.method`, implicit instance calls, shared receiver state, and nested method-local isolation. Replace copied call-site bodies with separate generated functions. Keep later milestones planned until implementation and executed checks establish their behavior.
+Begin stage 5 with boolean literals, then comparisons, integer arithmetic, `if`/`unless`, and explicit `return`. Define numeric boundaries and overflow/error policy before accepting arithmetic. Cover Ruby truthiness, expression values, side effects, and method-local early returns. Keep later milestones planned until implementation and executed checks establish their behavior.

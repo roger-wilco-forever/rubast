@@ -14,10 +14,21 @@ module Rubast
       TOML
 
       def call(program)
-        GeneratedProject.new(files: {
-          "Cargo.toml" => MANIFEST,
-          "src/main.rs" => Emitter.new(program).call
-        }.freeze)
+        functions = {}
+        main = Emitter.new(functions).call(program)
+        source = ["use rubast_runtime::{Runtime, Value};", "", *functions.values.map(&:last), main].join("\n")
+        GeneratedProject.new(files: { "Cargo.toml" => MANIFEST, "src/main.rs" => source }.freeze)
+      end
+
+      def self.function(node, functions)
+        # ponytail: scalar arguments/fields keep lookup fixed; specialize when object dispatch varies by call.
+        key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name]
+        return functions.fetch(key).first if functions.key?(key)
+
+        name = "method_#{functions.length}"
+        functions[key] = [name, nil]
+        functions[key][1] = Emitter.new(functions).method(node, name)
+        name
       end
 
       ESCAPES = {
@@ -46,16 +57,25 @@ module Rubast
       end
 
       class Emitter
-        def initialize(program)
-          @program = program
+        def initialize(functions)
+          @functions = functions
           @locals = {}
           @next_temp = 0
         end
 
-        def call
-          lines = ["use rubast_runtime::{Runtime, Value};", "", "fn main() {",
-                   "    let mut runtime = Runtime::new();"]
-          @program.statements.each { |statement| emit_statement(statement, lines) }
+        def call(program)
+          lines = ["fn main() {", "    let runtime = &mut Runtime::new();"]
+          program.statements.each { |statement| emit_statement(statement, lines) }
+          lines.push("}", "").join("\n")
+        end
+
+        def method(node, name)
+          parameters = node.parameters.each_with_index.to_h { |parameter, index| [parameter, "arg_#{index}"] }
+          @locals = node.locals.to_h { |local| [local, "Value::Nil"] }.merge(parameters)
+          @receiver = "receiver"
+          signature = ["runtime: &mut Runtime", "receiver: Value", *parameters.values.map { |arg| "#{arg}: Value" }]
+          lines = ["fn #{name}(#{signature.join(', ')}) -> Value {"]
+          lines << "    #{emit_expression(node.body, lines)}"
           lines.push("}", "").join("\n")
         end
 
@@ -74,7 +94,8 @@ module Rubast
         def emit_expression(node, lines)
           case node
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral then Rust.literal(node)
-          when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite then emit_variable(node, lines)
+          when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
+            emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
@@ -86,6 +107,7 @@ module Rubast
 
         def emit_variable(node, lines)
           case node
+          when IR::SelfRead then "#{@receiver}.clone()"
           when IR::InstanceRead
             emit_value("runtime.get_ivar(&#{@receiver}, #{Rust.rust_string(node.name.to_s)})", lines)
           when IR::InstanceWrite
@@ -117,19 +139,12 @@ module Rubast
           receiver = emit_value(emit_expression(node.receiver, lines), lines) if node.is_a?(IR::MethodCall)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
           receiver ||= emit_value("runtime.new_object()", lines)
-          result = emit_invocation(node, receiver, arguments, lines)
-          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
-        end
+          return "#{receiver}.clone()" if node.is_a?(IR::NewObject) && node.body.expressions.empty?
 
-        def emit_invocation(node, receiver, arguments, lines)
-          saved_locals = @locals
-          saved_receiver = @receiver
-          @receiver = receiver
-          @locals = node.locals.to_h { |name| [name, "Value::Nil"] }.merge(node.parameters.zip(arguments).to_h)
-          emit_value(emit_expression(node.body, lines), lines)
-        ensure
-          @locals = saved_locals
-          @receiver = saved_receiver
+          function = Rust.function(node, @functions)
+          inputs = ["runtime", "#{receiver}.clone()", *arguments]
+          result = emit_value("#{function}(#{inputs.join(', ')})", lines)
+          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
         end
 
         def emit_interpolation(node, lines)

@@ -6,9 +6,17 @@ class Greeter
   end
 
   def greet
-    message = "Hello, #{@name}!"
+    message = self.message
     puts message
     message
+  end
+
+  def message
+    "Hello, #{name}!"
+  end
+
+  def name
+    @name&.chomp
   end
 end
 

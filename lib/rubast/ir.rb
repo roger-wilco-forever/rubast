@@ -10,9 +10,11 @@ module Rubast
     ConstantRead = Data.define(:name, :span)
     ObjectType = Data.define(:class_name, :fields)
     NewObject = Data.define(:class_name, :arguments, :parameters, :locals, :body, :result_type, :span)
+    SelfRead = Data.define(:result_type, :span)
     InstanceRead = Data.define(:name, :result_type, :span)
     InstanceWrite = Data.define(:name, :value, :span)
-    MethodCall = Data.define(:receiver, :arguments, :parameters, :locals, :body, :result_type, :span)
+    MethodCall = Data.define(:class_name, :name, :receiver, :arguments, :parameters, :locals, :body, :result_type,
+                             :span)
     Call = Data.define(:name, :receiver, :arguments, :safe_navigation, :span)
     IntegerLiteral = Data.define(:value, :span)
     StringLiteral = Data.define(:value, :span)
