@@ -135,3 +135,10 @@ Then("the emitted Rust defines {int} receiver functions") do |count|
   source = File.read(File.join(@output_path, "src/main.rs"))
   expect(source.scan(/^fn method_\d+\(runtime: &mut Runtime, receiver: Value/).length).to eq(count)
 end
+
+Then("CRuby prints the reference output:") do |expected|
+  stdout, stderr, status = Open3.capture3(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
+  expect(status.exitstatus).to eq(0)
+  expect(stderr).to eq("")
+  expect(stdout).to eq("#{expected}\n")
+end

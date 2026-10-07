@@ -14,6 +14,11 @@ Style/StringLiterals:
 Style/Documentation:
   Enabled: false
 
+# Each workload is a standalone compilation unit until require_relative is supported.
+Style/OneClassPerFile:
+  Exclude:
+    - "examples/workloads/*.rb"
+
 Naming/RescuedExceptionsVariableName:
   PreferredName: error
 

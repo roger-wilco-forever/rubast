@@ -98,6 +98,8 @@ target/linked-names/target/release/rubast_program
 
 Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run` and `emit-rust`; a separate `build` command and the broader language subset remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
 
+For application-shaped examples, see the [workload corpus and blocker table](examples/README.md): invoice payments currently compile; shipping policies, streaming logs, shopping-cart aggregation, notification configuration, and guarded unit pricing expose planned features and analysis limits. Every example has an executable CRuby reference; unsupported examples intentionally remain rejected by Rubast.
+
 See [the architecture and implementation plan](docs/architecture.md), [proposed technology stack](docs/technology-stack.md), and [contributor and agent development guide](docs/development.md). Documentation and Cucumber scenarios are written in English.
 
 ## Preliminary benchmarks

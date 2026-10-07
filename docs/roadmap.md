@@ -20,6 +20,8 @@ For every stage:
 
 No calendar estimates are assigned yet. Reassess estimates after object state and instance calls establish the cost of extending the implementation. Later stages may be split into smaller changes; a stage is complete only when its stated acceptance behavior works.
 
+The [realistic workload corpus](../examples/README.md) supplies application-shaped reference programs and observed blockers. Use shipping pricing for stage 7, streaming log summaries for stage 8, and cart aggregation for collection/block work. Notification selection and guarded unit pricing track object-join and predicate-narrowing limits outside the current contract. These examples supplement the stage sequence without declaring new support or reordering implementation.
+
 ## First milestone: a useful stateful class
 
 ```ruby
