@@ -12,7 +12,8 @@ module Rubast
 
       def normalize(node, source)
         case node
-        when Prism::IntegerNode, Prism::StringNode
+        when Prism::ClassNode then normalize_class(node, source)
+        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode
           normalize_local(node, source)
@@ -29,8 +30,40 @@ module Rubast
 
       def normalize_literal(node, source)
         case node
+        when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
         when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
         when Prism::StringNode then IR::StringLiteral.new(value: node.unescaped, span: span(node, source))
+        end
+      end
+
+      def normalize_class(node, source)
+        unsupported(node, source) if node.superclass || !node.constant_path.is_a?(Prism::ConstantReadNode)
+        methods = node.body&.body || []
+        unsupported(node, source) if methods.empty?
+
+        IR::ClassDefinition.new(name: node.name,
+                                definitions: methods.map { |method| normalize_method(method, source) }.freeze,
+                                span: span(node, source))
+      end
+
+      def normalize_method(node, source)
+        unsupported(node, source) unless node.is_a?(Prism::DefNode) && node.receiver.nil?
+        requireds = normalize_parameters(node.parameters, source)
+        body = node.body&.body || []
+        unsupported(node, source) unless body.one?
+
+        IR::MethodDefinition.new(name: node.name, parameters: requireds.map(&:name).freeze,
+                                 body: normalize(body.first, source), span: span(node, source))
+      end
+
+      def normalize_parameters(parameters, source)
+        return [] unless parameters
+
+        extras = [parameters.optionals, parameters.rest, parameters.posts, parameters.keywords,
+                  parameters.keyword_rest, parameters.block].flatten.compact
+        unsupported(parameters, source) unless extras.empty?
+        parameters.requireds.each do |parameter|
+          unsupported(parameter, source) unless parameter.is_a?(Prism::RequiredParameterNode)
         end
       end
 

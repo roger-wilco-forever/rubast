@@ -8,11 +8,12 @@ Rubast is a Ruby-written AOT compiler for a documented Ruby subset. It uses Pris
 | --- | --- |
 | Run Rubast or see the current subset | [README.md](README.md) |
 | Understand semantic boundaries and future milestones | [docs/architecture.md](docs/architecture.md) |
+| Follow the implementation sequence | [docs/roadmap.md](docs/roadmap.md) |
 | Find container keys and stage contracts | [docs/technology-stack.md](docs/technology-stack.md) |
 | Choose the owning file and verification | [docs/development.md](docs/development.md) |
 | See executable behavior examples | [features/](features/) and [examples/](examples/) |
 
-Current pipeline: source bytes → Prism AST → normalized IR → validation → Rust source and runtime → Cargo binary. The CLI exposes only `run`. Signed 64-bit integers, UTF-8 strings, top-level locals, `gets`, safe `chomp`, interpolation, and `puts` form the current subset. Other constructs described in the architecture may still be proposals.
+Current pipeline: source bytes → Prism AST → normalized IR → validation → Rust source and runtime → Cargo binary. The CLI exposes only `run`. signed 64-bit integers, UTF-8 strings, top-level locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes form the current subset. Other constructs described in the architecture may still be proposals.
 
 ## Invariants
 
@@ -30,5 +31,6 @@ Current pipeline: source bytes → Prism AST → normalized IR → validation �
 3. Implement in the owning stage. Add a focused RSpec example when it tests a pass decision or container wiring that the scenario cannot isolate.
 4. Run the focused check, then `bin/verify` before reporting completion. This runs RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests. CI runs the same checks on pushes and pull requests.
 5. Report which checks actually ran. Update the documented subset when support changes. A diagnostic removed without emitted execution evidence is not a completed feature.
+6. Complete roadmap stages in order. After each stage passes `bin/verify`, commit its implementation, tests, and documentation and push it to GitHub before starting the next stage. Report the commit and push result; distinguish local checks from hosted CI status.
 
 Write project documentation, Cucumber features, and Cucumber step definitions in English. Do not weaken a user-provided scenario or suppress a failing comparison to make a check green. Documentation-only edits need no new behavior test.

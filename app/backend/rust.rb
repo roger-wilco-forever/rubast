@@ -46,6 +46,7 @@ module Rubast
           case node
           when IR::LocalWrite then emit_local_write(node, lines)
           when IR::Puts then lines << "    runtime.puts(#{emit_expression(node.value, lines)});"
+          when IR::MethodCall, IR::NewObject then lines << "    let _ = #{emit_expression(node, lines)};"
           else raise ArgumentError, "unsupported semantic statement: #{node.class}"
           end
         end
@@ -70,6 +71,7 @@ module Rubast
           when IR::GetLine then emit_gets(lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
+          when IR::NewObject, IR::MethodCall then emit_object(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
         end
@@ -79,6 +81,26 @@ module Rubast
           @next_temp += 1
           lines << "    let #{temp} = runtime.gets();"
           temp
+        end
+
+        def emit_object(node, lines)
+          node.is_a?(IR::NewObject) ? "Value::Object" : emit_method_call(node, lines)
+        end
+
+        def emit_method_call(node, lines)
+          lines << "    let _ = #{emit_expression(node.receiver, lines)};"
+          arguments = node.arguments.map do |argument|
+            value = emit_expression(argument, lines)
+            temp = "temp_#{@next_temp}"
+            @next_temp += 1
+            lines << "    let #{temp} = #{value};"
+            temp
+          end
+          saved_locals = @locals
+          @locals = node.parameters.zip(arguments).to_h
+          emit_expression(node.body, lines)
+        ensure
+          @locals = saved_locals if saved_locals
         end
 
         def emit_interpolation(node, lines)

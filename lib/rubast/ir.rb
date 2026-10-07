@@ -3,6 +3,11 @@
 module Rubast
   module IR
     Program = Data.define(:statements)
+    ClassDefinition = Data.define(:name, :definitions, :span)
+    MethodDefinition = Data.define(:name, :parameters, :body, :span)
+    ConstantRead = Data.define(:name, :span)
+    NewObject = Data.define(:class_name, :span)
+    MethodCall = Data.define(:receiver, :arguments, :parameters, :body, :result_type, :span)
     Call = Data.define(:name, :receiver, :arguments, :safe_navigation, :span)
     IntegerLiteral = Data.define(:value, :span)
     StringLiteral = Data.define(:value, :span)

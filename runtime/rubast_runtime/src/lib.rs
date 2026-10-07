@@ -5,6 +5,8 @@ pub enum Value {
     Nil,
     Integer(i64),
     String(String),
+    // ponytail: stateless objects need only a tag; add shared identity with instance state.
+    Object,
 }
 
 impl Value {
@@ -13,6 +15,7 @@ impl Value {
             Self::Nil => String::new(),
             Self::Integer(number) => number.to_string(),
             Self::String(text) => text,
+            Self::Object => unreachable!("object string conversion is unsupported"),
         }
     }
 }
@@ -51,7 +54,9 @@ impl Runtime {
                 text.truncate(text.len() - suffix_bytes);
                 Value::String(text)
             }
-            Value::Integer(_) => unreachable!("safe_chomp requires a string or nil"),
+            Value::Integer(_) | Value::Object => {
+                unreachable!("safe_chomp requires a string or nil")
+            }
         }
     }
 
