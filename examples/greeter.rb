@@ -2,9 +2,11 @@
 
 class Greeter
   def greet(name)
-    "Hello, #{name}!"
+    message = "Hello, #{name}!"
+    puts message
+    message
   end
 end
 
 greeter = Greeter.new
-puts greeter.greet("Ada")
+greeter.greet("Ada")

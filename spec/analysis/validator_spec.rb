@@ -8,7 +8,9 @@ RSpec.describe Rubast::Analysis::Validator do
     validator = Rubast::Container["analysis.validator"]
     span = Rubast::Span.new(path: "example.rb", line: 1, column: 1)
     method = Rubast::IR::MethodDefinition.new(
-      name: :value, parameters: [], body: Rubast::IR::IntegerLiteral.new(value: 1, span: span), span: span
+      name: :value, parameters: [], locals: [],
+      body: Rubast::IR::Sequence.new(expressions: [Rubast::IR::IntegerLiteral.new(value: 1, span: span)],
+                                     result_type: nil, span: span), span: span
     )
     definition = Rubast::IR::ClassDefinition.new(name: :Example, definitions: [method], span: span)
     program = Rubast::IR::Program.new(statements: [definition])

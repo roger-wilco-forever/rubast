@@ -4,7 +4,7 @@ Recorded on 2026-10-06. This is the agreed implementation order, not a claim tha
 
 ## Starting point
 
-The compiler supports signed 64-bit integers, UTF-8 strings, top-level locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes. A class can be constructed without arguments; instance methods have required positional scalar arguments and a single expression body. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Instance state and inheritance remain unsupported.
+The compiler supports `nil`, signed 64-bit integers, UTF-8 strings, top-level and method locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes. A class can be constructed without arguments; instance methods have required positional scalar arguments and an expression-sequence body with local assignment, `puts`, and last-expression returns. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Instance state and inheritance remain unsupported.
 
 ## Completion rule
 
@@ -44,12 +44,13 @@ Add `emit-rust FILE -o DIR`, preserving generated Rust, a Cargo manifest, and th
 
 **Delivered:** `emit-rust FILE -o DIR`, shared `build.writer`, standalone runtime source without build caches, and `E_OUTPUT` for destination errors. [Emission scenarios](../features/emit_rust.feature) cover independent execution, stdin/EOF, directories with spaces, empty/nonempty destinations, filesystem failures, emission without Cargo, and CLI misuse. `bin/verify` passed: RuboCop, 2 RSpec examples, 43 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
-### 2. Multi-expression method bodies — planned
+### 2. Multi-expression method bodies — complete (2026-10-06)
 
 Support local assignments, expression sequences, `puts` within methods, the last expression's value, and `nil` results for empty bodies. Analyze parameter-dependent operations using argument types while still checking every method for unsupported syntax.
 
 **Acceptance:** method locals do not leak into callers; reassignment and side effects execute in order; empty methods return `nil`; the final assignment, call, or literal returns the correct value.
 
+**Delivered:** sequence and `nil` IR forms, method-local scopes and initialization, expression-valued assignment and `puts`, and argument-specific body validation. Each assignment gets a separate Rust binding so later writes cannot change an earlier read. Argument types are captured during evaluation, before later arguments can reassign their source locals. [Method-body scenarios](../features/method_bodies.feature) cover these behaviors and diagnostics for invalid argument types and unsupported intermediate expressions in unused methods. The Greeter example now has a multi-expression body. `bin/verify` passed: RuboCop, 2 RSpec examples, 54 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
 ### 3. Object state and constructors — planned
 
@@ -159,4 +160,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 2 with a differential scenario for a multi-expression method that assigns a local, prints a value, and returns its final expression. Keep later milestones planned until implementation and executed checks establish their behavior.
+Begin stage 3 with differential scenarios for constructor arguments, instance-variable reads and writes, independent instances, aliases that share mutations, and unset fields returning `nil`. Keep later milestones planned until implementation and executed checks establish their behavior.

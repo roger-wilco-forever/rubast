@@ -30,7 +30,6 @@ module Rubast
           @program = program
           @locals = {}
           @next_temp = 0
-          @assignment_counts = program.statements.grep(IR::LocalWrite).map(&:name).tally
         end
 
         def call
@@ -43,44 +42,55 @@ module Rubast
         private
 
         def emit_statement(node, lines)
-          case node
-          when IR::LocalWrite then emit_local_write(node, lines)
-          when IR::Puts then lines << "    runtime.puts(#{emit_expression(node.value, lines)});"
-          when IR::MethodCall, IR::NewObject then lines << "    let _ = #{emit_expression(node, lines)};"
-          else raise ArgumentError, "unsupported semantic statement: #{node.class}"
-          end
+          lines << "    let _ = #{emit_expression(node, lines)};"
         end
 
         def emit_local_write(node, lines)
           value = emit_expression(node.value, lines)
-          if @locals.key?(node.name)
-            lines << "    #{@locals.fetch(node.name)} = #{value};"
-          else
-            local = "local_#{@locals.length}"
-            @locals[node.name] = local
-            mutability = @assignment_counts.fetch(node.name) > 1 ? "mut " : ""
-            lines << "    let #{mutability}#{local} = #{value};"
-          end
+          @locals[node.name] = emit_value(value, lines)
+          "#{@locals.fetch(node.name)}.clone()"
         end
 
         def emit_expression(node, lines)
           case node
-          when IR::IntegerLiteral then "Value::Integer(#{node.value})"
-          when IR::StringLiteral then "Value::String(#{rust_string(node.value)}.to_owned())"
-          when IR::LocalRead then "#{@locals.fetch(node.name)}.clone()"
-          when IR::GetLine then emit_gets(lines)
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral then emit_literal(node)
+          when IR::LocalRead, IR::LocalWrite then emit_local(node, lines)
+          when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
           when IR::NewObject, IR::MethodCall then emit_object(node, lines)
+          when IR::Puts, IR::Sequence then emit_body(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
         end
 
-        def emit_gets(lines)
+        def emit_local(node, lines)
+          node.is_a?(IR::LocalWrite) ? emit_local_write(node, lines) : "#{@locals.fetch(node.name)}.clone()"
+        end
+
+        def emit_literal(node)
+          case node
+          when IR::NilLiteral then "Value::Nil"
+          when IR::IntegerLiteral then "Value::Integer(#{node.value})"
+          when IR::StringLiteral then "Value::String(#{rust_string(node.value)}.to_owned())"
+          end
+        end
+
+        def emit_value(value, lines)
           temp = "temp_#{@next_temp}"
           @next_temp += 1
-          lines << "    let #{temp} = runtime.gets();"
+          lines << "    let #{temp} = #{value};"
           temp
+        end
+
+        def emit_body(node, lines)
+          if node.is_a?(IR::Puts)
+            lines << "    runtime.puts(#{emit_expression(node.value, lines)});"
+            "Value::Nil"
+          else
+            node.expressions[0...-1].each { |expression| emit_statement(expression, lines) }
+            node.expressions.empty? ? "Value::Nil" : emit_expression(node.expressions.last, lines)
+          end
         end
 
         def emit_object(node, lines)
@@ -89,15 +99,9 @@ module Rubast
 
         def emit_method_call(node, lines)
           lines << "    let _ = #{emit_expression(node.receiver, lines)};"
-          arguments = node.arguments.map do |argument|
-            value = emit_expression(argument, lines)
-            temp = "temp_#{@next_temp}"
-            @next_temp += 1
-            lines << "    let #{temp} = #{value};"
-            temp
-          end
+          arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
           saved_locals = @locals
-          @locals = node.parameters.zip(arguments).to_h
+          @locals = node.locals.to_h { |name| [name, "Value::Nil"] }.merge(node.parameters.zip(arguments).to_h)
           emit_expression(node.body, lines)
         ensure
           @locals = saved_locals if saved_locals

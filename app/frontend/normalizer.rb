@@ -13,7 +13,7 @@ module Rubast
       def normalize(node, source)
         case node
         when Prism::ClassNode then normalize_class(node, source)
-        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode
+        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode
           normalize_local(node, source)
@@ -30,6 +30,7 @@ module Rubast
 
       def normalize_literal(node, source)
         case node
+        when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
         when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
         when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
         when Prism::StringNode then IR::StringLiteral.new(value: node.unescaped, span: span(node, source))
@@ -49,11 +50,16 @@ module Rubast
       def normalize_method(node, source)
         unsupported(node, source) unless node.is_a?(Prism::DefNode) && node.receiver.nil?
         requireds = normalize_parameters(node.parameters, source)
-        body = node.body&.body || []
-        unsupported(node, source) unless body.one?
-
         IR::MethodDefinition.new(name: node.name, parameters: requireds.map(&:name).freeze,
-                                 body: normalize(body.first, source), span: span(node, source))
+                                 locals: node.locals.freeze, body: normalize_method_body(node, source),
+                                 span: span(node, source))
+      end
+
+      def normalize_method_body(node, source)
+        unsupported(node.body, source) if node.body && !node.body.is_a?(Prism::StatementsNode)
+        body = node.body&.body || []
+        IR::Sequence.new(expressions: body.map { |expression| normalize(expression, source) }.freeze,
+                         result_type: nil, span: span(node, source))
       end
 
       def normalize_parameters(parameters, source)
