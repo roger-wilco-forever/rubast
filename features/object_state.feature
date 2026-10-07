@@ -218,6 +218,5 @@ Feature: Preserve constructor behavior and instance state
       | class Cell; def initialize(value); @value = value; end; end; Cell.new                     |
       | class Cell; def initialize; end; end; Cell.new(42)                                        |
       | class Cell; def initialize; end; end; Cell.new.initialize                                 |
-      | class Value; def value; 42; end; end; class Cell; def store; @value = Value.new; end; end |
       | class Cell; def value; 42; end; end; puts @value                                          |
       | @value = 42                                                                               |

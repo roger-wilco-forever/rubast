@@ -322,7 +322,6 @@ Feature: Preserve conditional values and method returns
       | source                                                                              | code            |
       | return 42                                                                           | E_UNSUPPORTED   |
       | class Choice; def pick; return 1, 2; end; end                                       | E_UNSUPPORTED   |
-      | class Choice; def pick; return self; end; end                                       | E_UNSUPPORTED   |
       | class Choice; def pick; return 42; unknown; end; end                                | E_UNSUPPORTED   |
       | if false; unknown; else; puts 42; end                                               | E_UNSUPPORTED   |
       | value = if true; "Ada"; else; 42; end; puts value&.chomp                            | E_UNSUPPORTED   |

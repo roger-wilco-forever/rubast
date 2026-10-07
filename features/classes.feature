@@ -93,7 +93,6 @@ Feature: Stateless user classes
       | source                                                                         |
       | class Child < Object; def name; "child"; end; end                              |
       | class Stateful; def initialize; "init"; end; end; Stateful.new.initialize      |
-      | class Stateful; def value; @value = self; end; end                             |
       | class Default; def value(input = "default"); input; end; end                   |
       | class Keyword; def value(input:); input; end; end                              |
       | class Singleton; def self.value; 42; end; end                                  |

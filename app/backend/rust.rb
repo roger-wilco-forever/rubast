@@ -21,14 +21,26 @@ module Rubast
       end
 
       def self.function(node, functions)
-        # ponytail: scalar arguments/fields keep lookup fixed; specialize when object dispatch varies by call.
-        key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name]
+        key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name, dispatches(node.body)]
         return functions.fetch(key).first if functions.key?(key)
 
         name = "method_#{functions.length}"
         functions[key] = [name, nil]
         functions[key][1] = Emitter.new(functions).method(node, name)
         name
+      end
+
+      def self.dispatches(node)
+        return [] unless node.respond_to?(:span)
+
+        # Types can contain cycles; only resolved calls affect emitted dispatch.
+        children = node.to_h.except(:span, :result_type).values
+        nested = children.flat_map { |value| Array(value).flat_map { |child| dispatches(child) } }
+        case node
+        when IR::MethodCall then [[node.class_name, node.name, nested]]
+        when IR::NewObject then [[node.class_name, :initialize, nested]]
+        else nested
+        end
       end
 
       ESCAPES = {
