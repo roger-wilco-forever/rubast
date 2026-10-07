@@ -12,7 +12,7 @@ RSpec.describe Rubast::Analysis::Validator do
       body: Rubast::IR::Sequence.new(expressions: [Rubast::IR::IntegerLiteral.new(value: 1, span: span)],
                                      result_type: nil, span: span), span: span
     )
-    definition = Rubast::IR::ClassDefinition.new(name: :Example, definitions: [method], span: span)
+    definition = Rubast::IR::ClassDefinition.new(name: :Example, superclass: nil, definitions: [method], span: span)
     program = Rubast::IR::Program.new(statements: [definition], locals: [], warnings: [])
     expect(validator.call(program).statements).to eq([])
     expect(validator.call(program).statements).to eq([])

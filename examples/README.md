@@ -6,14 +6,14 @@ The small examples at the root demonstrate supported constructs: [interactive in
 
 ## Realistic workload corpus
 
-The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All six run successfully on CRuby with the documented inputs; five currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All six run successfully on CRuby with the documented inputs; four currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after stage 6 on 2026-10-07:
+Observed after stage 7 on 2026-10-07:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
 | [invoice.rb](workloads/invoice.rb) | Customer, one invoice line, rejected/accepted payment, quantity update through an alias | Matches CRuby | None on the supplied fixture | Multiple lines would need collections; no general billing or validation contract is claimed |
-| [shipping.rb](workloads/shipping.rb) | Standard/express pricing with an inherited constructor and overridden calculation | `E_UNSUPPORTED`, line 13 | Subclass `ClassNode` | Inherited lookup and forwarded `super` (stage 7) |
+| [shipping.rb](workloads/shipping.rb) | Standard/express pricing with an inherited constructor and overridden calculation | Matches CRuby | None on the supplied fixture | Built-in superclasses, blocks, and extended arguments remain outside the subset |
 | [log_summary.rb](workloads/log_summary.rb) | Read status lines until EOF and count successful/failed entries | `E_UNSUPPORTED`, line 5 | `WhileNode` | Loops, `+=`, and a range/overflow policy for input-dependent counters (stage 8 and numeric contract) |
 | [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 16 | `ArrayNode` | Array storage/append, `Array#sum`, symbols, and Symbol-to-Proc block conversion (stages 9–11; each needs a supported-call contract) |
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |
@@ -30,14 +30,15 @@ ruby examples/workloads/invoice.rb
 bundle exec ruby bin/rubast run examples/workloads/invoice.rb
 ```
 
-An unsupported example remains runnable as ordinary Ruby:
+Shipping now compiles and matches its reference:
 
 ```sh
 ruby examples/workloads/shipping.rb
 # standard:5200
 # express:5700
 bundle exec ruby bin/rubast run examples/workloads/shipping.rb
-# E_UNSUPPORTED; exit status 2
+# standard:5200
+# express:5700
 ```
 
 Input fixtures:
@@ -57,13 +58,13 @@ The remaining examples need no input. Shopping-cart output is `total:4900 cents`
 
 ## Track progress
 
-[The Cucumber corpus](../features/realistic_examples.feature) checks the invoice against CRuby and pins reference outputs for every program. Currently unsupported cases assert the diagnostic code, Ruby line, and absence of an emitted project. Their tag allows focused checks:
+[The Cucumber corpus](../features/realistic_examples.feature) checks invoice and shipping execution against CRuby and pins reference outputs for every program. Currently unsupported cases assert the diagnostic code, Ruby line, and absence of an emitted project. Their tag allows focused checks:
 
 ```sh
 bundle exec cucumber --publish-quiet features/realistic_examples.feature
 bundle exec cucumber --publish-quiet features/realistic_examples.feature --tags @unsupported_examples
 ```
 
-The suite is expected to pass while the five Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
+The suite is expected to pass while the four Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
 
 This corpus supplements the agreed roadmap; it does not reorder stages or complete them. The files remain self-contained while multiple-source compilation is planned, so the one-class-per-file lint rule is exempted only for this workload directory.

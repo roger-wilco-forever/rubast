@@ -13,12 +13,10 @@ Feature: Track realistic programs and their current compiler blockers
       Ada: 3 x Ruby book, 4500 cents, paid
       """
 
-  @unsupported_examples
-  Scenario: Shipping policies need inherited construction and super
+  Scenario: Shipping policies inherit construction and use super
     Given I use the example "workloads/shipping.rb"
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 13
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
     And CRuby prints the reference output:
       """
       standard:5200

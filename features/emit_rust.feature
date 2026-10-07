@@ -31,10 +31,20 @@ Feature: Save an independently buildable Rust project
     When I emit a Rust project
     Then the emitted project contains its source and runtime
 
-  Scenario: Reject unsupported input without creating a project
+  Scenario: Emit and run an empty class
     Given the Ruby source is:
       """
       class Unsupported; end
+      """
+    When I emit a Rust project
+    Then the emitted project contains its source and runtime
+    When I build and run the emitted project
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Reject unsupported input without creating a project
+    Given the Ruby source is:
+      """
+      module Unsupported; end
       """
     When I emit a Rust project
     Then the diagnostic has code "E_UNSUPPORTED" at line 1

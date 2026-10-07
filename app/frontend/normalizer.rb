@@ -111,17 +111,17 @@ module Rubast
           )
         when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode
           normalize_flow(node, source)
-        when Prism::CallNode then normalize_call(node, source)
+        when Prism::CallNode, Prism::SuperNode, Prism::ForwardingSuperNode then normalize_invocation(node, source)
         else unsupported(node, source)
         end
       end
 
       def normalize_class(node, source)
-        unsupported(node, source) if node.superclass || !node.constant_path.is_a?(Prism::ConstantReadNode)
+        unsupported(node, source) unless node.constant_path.is_a?(Prism::ConstantReadNode)
+        unsupported(node.superclass, source) if node.superclass && !node.superclass.is_a?(Prism::ConstantReadNode)
         methods = node.body&.body || []
-        unsupported(node, source) if methods.empty?
 
-        IR::ClassDefinition.new(name: node.name,
+        IR::ClassDefinition.new(name: node.name, superclass: node.superclass && normalize(node.superclass, source),
                                 definitions: methods.map { |method| normalize_method(method, source) }.freeze,
                                 span: span(node, source))
       end
@@ -161,6 +161,18 @@ module Rubast
           safe_navigation: node.call_operator_loc&.slice == "&.",
           span: span(node, source)
         )
+      end
+
+      def normalize_invocation(node, source)
+        node.is_a?(Prism::CallNode) ? normalize_call(node, source) : normalize_super(node, source)
+      end
+
+      def normalize_super(node, source)
+        unsupported(node.block, source) if node.block
+        forward = node.is_a?(Prism::ForwardingSuperNode)
+        arguments = forward ? [] : (node.arguments&.arguments || [])
+        IR::Super.new(arguments: arguments.map { |argument| normalize(argument, source) }.freeze,
+                      forward_arguments: forward, span: span(node, source))
       end
 
       def unsupported(node, source)

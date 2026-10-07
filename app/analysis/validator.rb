@@ -244,12 +244,42 @@ module Rubast
         end
       end
 
-      module InstanceState
+      module Inheritance
         private
 
         def implicit_method?(node)
-          node.receiver.nil? && @receiver_type && @classes.fetch(@receiver_type.class_name).key?(node.name)
+          node.receiver.nil? && @receiver_type && lookup_method(@receiver_type.class_name, node.name)
         end
+
+        def lookup_method(class_name, name)
+          while class_name
+            method = @classes.fetch(class_name)[name]
+            return [class_name, method] if method
+
+            class_name = @superclasses[class_name]
+          end
+          nil
+        end
+
+        def validate_super(node, locals)
+          unsupported(node) unless @method_context
+          owner, current = @method_context
+          target = lookup_method(@superclasses[owner], current.name)
+          unsupported(node) unless target || current.name == :initialize
+          arguments = if node.forward_arguments
+                        current.parameters.map { |name| IR::LocalRead.new(name: name, span: node.span) }.freeze
+                      else
+                        node.arguments
+                      end
+          call = IR::Call.new(name: current.name, receiver: nil, arguments: arguments,
+                              safe_navigation: false, span: node.span)
+          receiver = IR::SelfRead.new(result_type: @receiver_type, span: node.span)
+          validate_object_call(call, receiver, @receiver_type, target || [:Object, nil], locals)
+        end
+      end
+
+      module InstanceState
+        private
 
         def validate_variable(node, locals)
           case node
@@ -268,14 +298,13 @@ module Rubast
           end
         end
 
-        def validate_method_body(method, parameters, receiver, origin = method)
-          saved_receiver = @receiver_type
-          saved_methods = @active_methods
-          saved_exits = @return_exits
-          key = [receiver.class_name, method.name]
-          unsupported(origin) if saved_methods.include?(key)
-          @active_methods = saved_methods + [key]
+        def validate_method_body(method, parameters, receiver, origin = method, owner: receiver.class_name)
+          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context]
+          key = [receiver.class_name, owner, method.name]
+          unsupported(origin) if @active_methods.include?(key)
+          @active_methods += [key]
           @receiver_type = receiver
+          @method_context = [owner, method]
           @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           body = validate_expression(method.body, locals)
@@ -288,9 +317,7 @@ module Rubast
           merge_states(states, nil, origin)
           body.with(result_type: join_types(types, origin))
         ensure
-          @receiver_type = saved_receiver
-          @active_methods = saved_methods
-          @return_exits = saved_exits
+          @receiver_type, @active_methods, @return_exits, @method_context = saved_context
         end
 
         def validate_method_call(node, locals)
@@ -300,15 +327,16 @@ module Rubast
           return validate_operation(node, receiver, type, locals) unless type.is_a?(IR::ObjectType)
 
           unsupported(node) if node.name == :initialize
-          method = @classes.fetch(type.class_name)[node.name]
-          return validate_identity(node, receiver, type, locals) unless method
+          target = lookup_method(type.class_name, node.name)
+          return validate_identity(node, receiver, type, locals) unless target
 
-          validate_object_call(node, receiver, type, method, locals)
+          validate_object_call(node, receiver, type, target, locals)
         end
 
-        def validate_object_call(node, receiver, type, method, locals)
-          invocation = validate_invocation(node, method, locals, type)
-          IR::MethodCall.new(class_name: type.class_name, name: node.name, receiver: receiver, **invocation,
+        def validate_object_call(node, receiver, type, target, locals)
+          owner, method = target
+          invocation = validate_invocation(node, method, locals, type, owner: owner)
+          IR::MethodCall.new(class_name: owner, name: node.name, receiver: receiver, **invocation,
                              result_type: invocation.fetch(:body).result_type, span: node.span)
         end
 
@@ -325,9 +353,8 @@ module Rubast
         end
 
         def validate_identity(node, receiver, type, locals)
-          if node.name == :!= && @classes.fetch(type.class_name).key?(:==)
-            method = @classes.fetch(type.class_name).fetch(:==)
-            equal = validate_object_call(node.with(name: :==), receiver, type, method, locals)
+          if node.name == :!= && (target = lookup_method(type.class_name, :==))
+            equal = validate_object_call(node.with(name: :==), receiver, type, target, locals)
             result = type_of(equal, locals) == :never ? :never : :boolean
             return IR::Operation.new(name: :!, operands: [equal].freeze, result_type: result, span: node.span)
           end
@@ -341,10 +368,12 @@ module Rubast
         include Operations
         include State
         include ControlFlow
+        include Inheritance
         include InstanceState
 
         def call(program)
           @classes = {}
+          @superclasses = {}
           @active_methods = []
           @objects = []
           locals = program.locals.to_h { |name| [name, :nil] }
@@ -370,21 +399,28 @@ module Rubast
         end
 
         def validate_class(node)
-          unsupported(node) if @classes.key?(node.name) || Object.const_defined?(node.name, false)
-          methods = {}
-          node.definitions.each do |method|
-            unsupported(method) if methods.key?(method.name)
-            methods[method.name] = method
-          end
-          @classes[node.name] = methods.freeze
+          register_class(node)
           object_count = @objects.length
-          methods.each_value do |method|
+          @classes.fetch(node.name).each_value do |method|
             parameters = method.parameters.to_h { |name| [name, :unknown] }
             receiver = object_type(node.name, :unknown)
             validate_method_body(method, parameters, receiver)
           end
           @objects.slice!(object_count..)
           nil
+        end
+
+        def register_class(node)
+          unsupported(node) if @classes.key?(node.name) || Object.const_defined?(node.name, false)
+          superclass = node.superclass&.name
+          unsupported(node.superclass) if superclass && !@classes.key?(superclass)
+          methods = {}
+          node.definitions.each do |method|
+            unsupported(method) if methods.key?(method.name)
+            methods[method.name] = method
+          end
+          @classes[node.name] = methods.freeze
+          @superclasses[node.name] = superclass
         end
 
         def validate_scalar(node, locals)
@@ -403,6 +439,7 @@ module Rubast
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
           when IR::Call then validate_call(node, locals)
+          when IR::Super then validate_super(node, locals)
           else unsupported(node)
           end
         end
@@ -422,7 +459,8 @@ module Rubast
           name = node.receiver.name
           unsupported(node) unless @classes.key?(name) && node.name == :new && !node.safe_navigation
           type = object_type(name, :nil)
-          invocation = validate_invocation(node, @classes.fetch(name)[:initialize], locals, type)
+          owner, method = lookup_method(name, :initialize)
+          invocation = validate_invocation(node, method, locals, type, owner: owner)
           IR::NewObject.new(class_name: name, **invocation,
                             result_type: invocation.fetch(:body).result_type == :never ? :never : type, span: node.span)
         end
@@ -437,12 +475,12 @@ module Rubast
 
       private
 
-      def validate_invocation(node, method, locals, receiver)
+      def validate_invocation(node, method, locals, receiver, owner:)
         names = method&.parameters || []
         unsupported(node) unless node.arguments.length == names.length
         arguments, parameters = validate_arguments(node.arguments, names, locals)
         body = if method
-                 validate_method_body(method, parameters, receiver, node)
+                 validate_method_body(method, parameters, receiver, node, owner: owner)
                else
                  IR::Sequence.new(expressions: [].freeze, result_type: :nil, span: node.span)
                end

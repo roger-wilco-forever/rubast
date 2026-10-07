@@ -12,10 +12,18 @@ Feature: First Ruby-to-Rust compilation slice
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Report an unsupported construct
+  Scenario: Execute an empty class definition
     Given the Ruby source is:
       """
       class Greeter; end
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Report an unsupported construct
+    Given the Ruby source is:
+      """
+      module Greeter; end
       """
     When I run Rubast
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
