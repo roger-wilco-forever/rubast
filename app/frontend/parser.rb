@@ -7,7 +7,7 @@ module Rubast
     class Parser
       def call(source)
         result = Prism.parse(source.bytes, filepath: source.path)
-        return result.value if result.errors.empty?
+        return result if result.errors.empty?
 
         error = result.errors.first
         raise CompilationError.new(

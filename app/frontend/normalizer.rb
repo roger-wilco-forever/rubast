@@ -3,16 +3,103 @@
 module Rubast
   module Frontend
     class Normalizer
-      def call(ast, source)
-        IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze)
+      def call(parsed, source)
+        ast = parsed.value
+        IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze,
+                        locals: ast.locals.freeze, warnings: normalize_warnings(parsed, source))
       end
 
+      module Expressions
+        private
+
+        def normalize_flow(node, source)
+          case node
+          when Prism::IfNode, Prism::UnlessNode then normalize_conditional(node, source)
+          when Prism::EmbeddedStatementsNode then normalize_embedded(node, source)
+          when Prism::ParenthesesNode then normalize_sequence(node.body, node, source)
+          when Prism::ReturnNode then normalize_return(node, source)
+          end
+        end
+
+        def normalize_return(node, source)
+          arguments = node.arguments&.arguments || []
+          unsupported(node, source) if arguments.length > 1
+          value = arguments.empty? ? IR::NilLiteral.new(span: span(node, source)) : normalize(arguments.first, source)
+          IR::Return.new(value: value, span: span(node, source))
+        end
+
+        def normalize_conditional(node, source)
+          otherwise = node.is_a?(Prism::IfNode) ? node.subsequent : node.else_clause
+          consequent = normalize_sequence(node.statements, node, source)
+          alternative = if otherwise.is_a?(Prism::IfNode)
+                          normalize_conditional(otherwise, source)
+                        else
+                          normalize_sequence(otherwise&.statements, node, source)
+                        end
+          if node.is_a?(Prism::UnlessNode)
+            IR::Conditional.new(predicate: normalize(node.predicate, source), consequent: alternative,
+                                alternative: consequent, result_type: nil, span: span(node, source))
+          else
+            IR::Conditional.new(predicate: normalize(node.predicate, source), consequent: consequent,
+                                alternative: alternative, result_type: nil, span: span(node, source))
+          end
+        end
+
+        def normalize_sequence(statements, origin, source)
+          body = statements&.body || []
+          IR::Sequence.new(expressions: body.map { |expression| normalize(expression, source) }.freeze,
+                           result_type: nil, span: span(origin, source))
+        end
+
+        def normalize_literal(node, source)
+          case node
+          when Prism::TrueNode, Prism::FalseNode
+            IR::BooleanLiteral.new(value: node.is_a?(Prism::TrueNode), span: span(node, source))
+          when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
+          when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
+          when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
+          when Prism::StringNode then IR::StringLiteral.new(value: node.unescaped, span: span(node, source))
+          end
+        end
+
+        def normalize_variable(node, source)
+          case node
+          when Prism::SelfNode then IR::SelfRead.new(result_type: nil, span: span(node, source))
+          when Prism::InstanceVariableWriteNode
+            IR::InstanceWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
+          when Prism::InstanceVariableReadNode
+            IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
+          when Prism::LocalVariableWriteNode
+            IR::LocalWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
+          when Prism::LocalVariableReadNode
+            IR::LocalRead.new(name: node.name, span: span(node, source))
+          end
+        end
+
+        def normalize_embedded(node, source)
+          statements = node.statements&.body || []
+          unsupported(node, source) unless statements.one?
+
+          normalize(statements.first, source)
+        end
+      end
+
+      include Expressions
+
       private
+
+      def normalize_warnings(parsed, source)
+        parsed.warnings.filter_map do |warning|
+          next unless warning.level == :default
+
+          "#{source.path}:#{warning.location.start_line}: warning: #{warning.message}"
+        end.freeze
+      end
 
       def normalize(node, source)
         case node
         when Prism::ClassNode then normalize_class(node, source)
-        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode
+        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
              Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode
@@ -22,18 +109,10 @@ module Rubast
             parts: node.parts.map { |part| normalize(part, source) }.freeze,
             span: span(node, source)
           )
-        when Prism::EmbeddedStatementsNode then normalize_embedded(node, source)
+        when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode
+          normalize_flow(node, source)
         when Prism::CallNode then normalize_call(node, source)
         else unsupported(node, source)
-        end
-      end
-
-      def normalize_literal(node, source)
-        case node
-        when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
-        when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
-        when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
-        when Prism::StringNode then IR::StringLiteral.new(value: node.unescaped, span: span(node, source))
         end
       end
 
@@ -57,9 +136,7 @@ module Rubast
 
       def normalize_method_body(node, source)
         unsupported(node.body, source) if node.body && !node.body.is_a?(Prism::StatementsNode)
-        body = node.body&.body || []
-        IR::Sequence.new(expressions: body.map { |expression| normalize(expression, source) }.freeze,
-                         result_type: nil, span: span(node, source))
+        normalize_sequence(node.body, node, source)
       end
 
       def normalize_parameters(parameters, source)
@@ -71,27 +148,6 @@ module Rubast
         parameters.requireds.each do |parameter|
           unsupported(parameter, source) unless parameter.is_a?(Prism::RequiredParameterNode)
         end
-      end
-
-      def normalize_variable(node, source)
-        case node
-        when Prism::SelfNode then IR::SelfRead.new(result_type: nil, span: span(node, source))
-        when Prism::InstanceVariableWriteNode
-          IR::InstanceWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
-        when Prism::InstanceVariableReadNode
-          IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
-        when Prism::LocalVariableWriteNode
-          IR::LocalWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
-        when Prism::LocalVariableReadNode
-          IR::LocalRead.new(name: node.name, span: span(node, source))
-        end
-      end
-
-      def normalize_embedded(node, source)
-        statements = node.statements&.body || []
-        unsupported(node, source) unless statements.one?
-
-        normalize(statements.first, source)
       end
 
       def normalize_call(node, source)

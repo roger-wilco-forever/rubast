@@ -13,7 +13,7 @@ RSpec.describe Rubast::Analysis::Validator do
                                      result_type: nil, span: span), span: span
     )
     definition = Rubast::IR::ClassDefinition.new(name: :Example, definitions: [method], span: span)
-    program = Rubast::IR::Program.new(statements: [definition])
+    program = Rubast::IR::Program.new(statements: [definition], locals: [], warnings: [])
     expect(validator.call(program).statements).to eq([])
     expect(validator.call(program).statements).to eq([])
 
@@ -21,7 +21,7 @@ RSpec.describe Rubast::Analysis::Validator do
       name: :new, receiver: Rubast::IR::ConstantRead.new(name: :Example, span: span),
       arguments: [], safe_navigation: false, span: span
     )
-    expect { validator.call(Rubast::IR::Program.new(statements: [construction])) }
+    expect { validator.call(Rubast::IR::Program.new(statements: [construction], locals: [], warnings: [])) }
       .to raise_error(Rubast::CompilationError, /unsupported/)
   end
 end

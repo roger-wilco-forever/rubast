@@ -19,8 +19,8 @@ module Rubast
 
     def generate(path)
       source = reader.call(path)
-      ast = parser.call(source)
-      syntax = normalizer.call(ast, source)
+      parsed = parser.call(source)
+      syntax = normalizer.call(parsed, source)
       semantic = validator.call(syntax)
       rust.call(semantic)
     end

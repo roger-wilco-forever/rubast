@@ -38,6 +38,7 @@ module Rubast
 
       def self.literal(node)
         case node
+        when IR::BooleanLiteral then "Value::Bool(#{node.value})"
         when IR::NilLiteral then "Value::Nil"
         when IR::IntegerLiteral then "Value::Integer(#{node.value})"
         when IR::StringLiteral then "Value::String(#{rust_string(node.value)}.to_owned())"
@@ -56,7 +57,44 @@ module Rubast
         point.chr(Encoding::UTF_8)
       end
 
+      module ControlFlow
+        private
+
+        def emit_flow(node, lines)
+          case node
+          when IR::Puts, IR::Sequence then emit_body(node, lines)
+          when IR::Conditional then emit_conditional(node, lines)
+          when IR::Return then "{ return #{emit_expression(node.value, lines)}; }"
+          when IR::Operation
+            operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
+            name = Rust.rust_string(node.name.to_s)
+            function = operands.one? ? "unary" : "binary"
+            emit_value("Runtime::#{function}(#{name}, #{operands.join(', ')})", lines)
+          end
+        end
+
+        def emit_conditional(node, lines)
+          predicate = emit_value(emit_expression(node.predicate, lines), lines)
+          branches = [node.consequent, node.alternative].map do |branch|
+            statements = []
+            statements << "    #{emit_expression(branch, statements)}"
+            statements.map { |statement| "    #{statement}" }.join("\n")
+          end
+          expression = "if Runtime::truthy(&#{predicate}) {\n#{branches.first}\n    } else {\n#{branches.last}\n    }"
+          emit_value(expression, lines)
+        end
+
+        def initialize_locals(names, parameters, lines)
+          @locals = names.each_with_index.to_h { |name, index| [name, "local_#{index}"] }
+          @locals.each do |name, binding|
+            lines << "    let mut #{binding} = #{parameters.fetch(name, 'Value::Nil')};"
+          end
+        end
+      end
+
       class Emitter
+        include ControlFlow
+
         def initialize(functions)
           @functions = functions
           @locals = {}
@@ -65,16 +103,18 @@ module Rubast
 
         def call(program)
           lines = ["fn main() {", "    let runtime = &mut Runtime::new();"]
+          program.warnings.each { |warning| lines << "    eprintln!(\"{}\", #{Rust.rust_string(warning)});" }
+          initialize_locals(program.locals, {}, lines)
           program.statements.each { |statement| emit_statement(statement, lines) }
           lines.push("}", "").join("\n")
         end
 
         def method(node, name)
           parameters = node.parameters.each_with_index.to_h { |parameter, index| [parameter, "arg_#{index}"] }
-          @locals = node.locals.to_h { |local| [local, "Value::Nil"] }.merge(parameters)
           @receiver = "receiver"
           signature = ["runtime: &mut Runtime", "receiver: Value", *parameters.values.map { |arg| "#{arg}: Value" }]
           lines = ["fn #{name}(#{signature.join(', ')}) -> Value {"]
+          initialize_locals(node.locals, parameters, lines)
           lines << "    #{emit_expression(node.body, lines)}"
           lines.push("}", "").join("\n")
         end
@@ -87,20 +127,20 @@ module Rubast
 
         def emit_local_write(node, lines)
           value = emit_expression(node.value, lines)
-          @locals[node.name] = emit_value(value, lines)
-          "#{@locals.fetch(node.name)}.clone()"
+          lines << "    #{@locals.fetch(node.name)} = #{value};"
+          emit_value("#{@locals.fetch(node.name)}.clone()", lines)
         end
 
         def emit_expression(node, lines)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral then Rust.literal(node)
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral then Rust.literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
           when IR::NewObject, IR::MethodCall then emit_object(node, lines)
-          when IR::Puts, IR::Sequence then emit_body(node, lines)
+          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation then emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
         end
@@ -114,14 +154,14 @@ module Rubast
             value = emit_expression(node.value, lines)
             emit_value("runtime.set_ivar(&#{@receiver}, #{Rust.rust_string(node.name.to_s)}, #{value})", lines)
           when IR::LocalWrite then emit_local_write(node, lines)
-          else "#{@locals.fetch(node.name)}.clone()"
+          else emit_value("#{@locals.fetch(node.name)}.clone()", lines)
           end
         end
 
         def emit_value(value, lines)
           temp = "temp_#{@next_temp}"
           @next_temp += 1
-          lines << "    let #{temp} = #{value};"
+          lines << "    let #{temp}: Value = #{value};"
           temp
         end
 

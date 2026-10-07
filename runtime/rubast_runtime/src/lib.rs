@@ -1,18 +1,27 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum Value {
     Nil,
+    Bool(bool),
     Integer(i64),
     String(String),
     Object(usize),
 }
 
 impl Value {
+    fn into_integer(self) -> i128 {
+        let Self::Integer(value) = self else {
+            unreachable!("integer operation requires proven integer operands");
+        };
+        i128::from(value)
+    }
+
     fn into_ruby_string(self) -> String {
         match self {
             Self::Nil => String::new(),
+            Self::Bool(value) => value.to_string(),
             Self::Integer(number) => number.to_string(),
             Self::String(text) => text,
             Self::Object(_) => unreachable!("object string conversion is unsupported"),
@@ -30,6 +39,57 @@ impl Runtime {
         Self {
             objects: Vec::new(),
         }
+    }
+
+    pub fn truthy(value: &Value) -> bool {
+        !matches!(value, Value::Nil | Value::Bool(false))
+    }
+
+    pub fn unary(name: &str, value: Value) -> Value {
+        if name == "!" {
+            return Value::Bool(!Self::truthy(&value));
+        }
+        let integer = value.into_integer();
+        let result = match name {
+            "+@" => integer,
+            "-@" => -integer,
+            _ => unreachable!("unknown integer unary operation"),
+        };
+        Value::Integer(result.try_into().expect("analysis proves an i64 result"))
+    }
+
+    pub fn binary(name: &str, left: Value, right: Value) -> Value {
+        match name {
+            "==" => return Value::Bool(left == right),
+            "!=" => return Value::Bool(left != right),
+            _ => {}
+        }
+        let left = left.into_integer();
+        let right = right.into_integer();
+        let result = match name {
+            "<" => return Value::Bool(left < right),
+            "<=" => return Value::Bool(left <= right),
+            ">" => return Value::Bool(left > right),
+            ">=" => return Value::Bool(left >= right),
+            "+" => left + right,
+            "-" => left - right,
+            "*" => left * right,
+            "/" => {
+                let quotient = left / right;
+                let remainder = left % right;
+                quotient - i128::from(remainder != 0 && ((remainder < 0) != (right < 0)))
+            }
+            "%" => {
+                let remainder = left % right;
+                if remainder != 0 && ((remainder < 0) != (right < 0)) {
+                    remainder + right
+                } else {
+                    remainder
+                }
+            }
+            _ => unreachable!("unknown integer binary operation"),
+        };
+        Value::Integer(result.try_into().expect("analysis proves an i64 result"))
     }
 
     pub fn new_object(&mut self) -> Value {
@@ -80,7 +140,7 @@ impl Runtime {
                 text.truncate(text.len() - suffix_bytes);
                 Value::String(text)
             }
-            Value::Integer(_) | Value::Object(_) => {
+            Value::Bool(_) | Value::Integer(_) | Value::Object(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }
         }

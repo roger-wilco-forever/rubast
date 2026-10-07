@@ -24,8 +24,8 @@ Target contract: each `Compiler#call(request)` gets a separate `CompilationConte
 | Stage | Input | Output |
 | --- | --- | --- |
 | SourceReader | Path and options | `SourceFile` with bytes and file path |
-| PrismParser | `SourceFile` | Prism AST or parse diagnostics |
-| Normalizer | Prism AST | Small syntax IR with `SourceSpan` |
+| PrismParser | `SourceFile` | Prism parse result containing AST and warnings, or parse diagnostics |
+| Normalizer | Prism parse result and `SourceFile` | Syntax IR with Ruby spans, lexical locals, and default-level warning text |
 | Validator/Analyzer | Syntax IR | Validated semantic IR |
 | RustEmitter | Validated IR | Rust files, Cargo manifest, source map |
 | CargoRunner | Generated project | Binary path, stdout/stderr, and exit status |

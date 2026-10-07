@@ -2,10 +2,16 @@
 
 module Rubast
   module IR
-    Program = Data.define(:statements)
+    Program = Data.define(:statements, :locals, :warnings)
     ClassDefinition = Data.define(:name, :definitions, :span)
     MethodDefinition = Data.define(:name, :parameters, :locals, :body, :span)
     Sequence = Data.define(:expressions, :result_type, :span)
+    BooleanLiteral = Data.define(:value, :span)
+    IntegerType = Data.define(:minimum, :maximum)
+    UnionType = Data.define(:types)
+    Operation = Data.define(:name, :operands, :result_type, :span)
+    Conditional = Data.define(:predicate, :consequent, :alternative, :result_type, :span)
+    Return = Data.define(:value, :span)
     NilLiteral = Data.define(:span)
     ConstantRead = Data.define(:name, :span)
     ObjectType = Data.define(:class_name, :fields)
