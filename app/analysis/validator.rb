@@ -10,7 +10,36 @@ module Rubast
         Session.new.call(program)
       end
 
+      module InstanceState
+        private
+
+        def validate_variable(node, locals)
+          case node
+          when IR::InstanceRead
+            unsupported(node) unless @receiver_type
+            node.with(result_type: @receiver_type.fields[node.name])
+          when IR::InstanceWrite
+            unsupported(node) unless @receiver_type
+            value = validate_scalar(node.value, locals)
+            @receiver_type.fields[node.name] = type_of(value, locals)
+            node.with(value: value)
+          else validate_local(node, locals)
+          end
+        end
+
+        def validate_method_body(method, parameters, receiver)
+          saved_receiver = @receiver_type
+          @receiver_type = receiver
+          locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
+          validate_scalar(method.body, locals)
+        ensure
+          @receiver_type = saved_receiver
+        end
+      end
+
       class Session < Validator
+        include InstanceState
+
         def call(program)
           @classes = {}
           locals = {}
@@ -47,9 +76,10 @@ module Rubast
           unsupported(node) if @classes.key?(node.name) || Object.const_defined?(node.name, false)
           methods = {}
           node.definitions.each do |method|
-            unsupported(method) if methods.key?(method.name) || method.name == :initialize
+            unsupported(method) if methods.key?(method.name)
             parameters = method.parameters.to_h { |name| [name, :scalar] }
-            validate_method_body(method, parameters)
+            receiver = IR::ObjectType.new(class_name: node.name, fields: Hash.new(:scalar))
+            validate_method_body(method, parameters, receiver)
             methods[method.name] = method
           end
           @classes[node.name] = methods.freeze
@@ -58,14 +88,14 @@ module Rubast
 
         def validate_scalar(node, locals)
           value = validate_expression(node, locals)
-          unsupported(node) if type_of(value, locals).is_a?(Array)
+          unsupported(node) if type_of(value, locals).is_a?(IR::ObjectType)
           value
         end
 
         def validate_expression(node, locals)
           case node
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral then validate_literal(node)
-          when IR::LocalRead, IR::LocalWrite then validate_local(node, locals)
+          when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite then validate_variable(node, locals)
           when IR::Sequence then validate_sequence(node, locals)
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
@@ -79,30 +109,29 @@ module Rubast
           return validate_puts(node, locals) if node.receiver.nil? && node.name == :puts
           return IR::GetLine.new(span: node.span) if gets_call?(node)
           return validate_safe_chomp(node, locals) if safe_chomp_call?(node)
-          return validate_new(node) if node.receiver.is_a?(IR::ConstantRead)
+          return validate_new(node, locals) if node.receiver.is_a?(IR::ConstantRead)
           return validate_method_call(node, locals) if node.receiver && !node.safe_navigation
 
           unsupported(node)
         end
 
-        def validate_new(node)
+        def validate_new(node, locals)
           name = node.receiver.name
-          unless @classes.key?(name) && node.name == :new && node.arguments.empty? && !node.safe_navigation
-            unsupported(node)
-          end
-          IR::NewObject.new(class_name: name, span: node.span)
+          unsupported(node) unless @classes.key?(name) && node.name == :new && !node.safe_navigation
+          type = IR::ObjectType.new(class_name: name, fields: Hash.new(:nil))
+          invocation = validate_invocation(node, @classes.fetch(name)[:initialize], locals, type)
+          IR::NewObject.new(class_name: name, **invocation, result_type: type, span: node.span)
         end
 
         def validate_method_call(node, locals)
           receiver = validate_expression(node.receiver, locals)
           type = type_of(receiver, locals)
-          unsupported(node) unless type.is_a?(Array)
-          method = @classes.fetch(type.last)[node.name]
-          unsupported(node) unless method && node.arguments.length == method.parameters.length
-          arguments, parameters = validate_arguments(node.arguments, method.parameters, locals)
-          body = validate_method_body(method, parameters)
-          IR::MethodCall.new(receiver: receiver, arguments: arguments.freeze, parameters: method.parameters,
-                             locals: method.locals, body: body, result_type: body.result_type, span: node.span)
+          unsupported(node) unless type.is_a?(IR::ObjectType) && node.name != :initialize
+          method = @classes.fetch(type.class_name)[node.name]
+          unsupported(node) unless method
+          invocation = validate_invocation(node, method, locals, type)
+          IR::MethodCall.new(receiver: receiver, **invocation,
+                             result_type: invocation.fetch(:body).result_type, span: node.span)
         end
 
         def validate_safe_chomp(node, locals)
@@ -114,6 +143,18 @@ module Rubast
       end
 
       private
+
+      def validate_invocation(node, method, locals, receiver)
+        names = method&.parameters || []
+        unsupported(node) unless node.arguments.length == names.length
+        arguments, parameters = validate_arguments(node.arguments, names, locals)
+        body = if method
+                 validate_method_body(method, parameters, receiver)
+               else
+                 IR::Sequence.new(expressions: [].freeze, result_type: :nil, span: node.span)
+               end
+        { arguments: arguments, parameters: names, locals: method&.locals || [], body: body }
+      end
 
       def validate_literal(node)
         case node
@@ -145,20 +186,14 @@ module Rubast
         node.with(expressions: expressions.freeze, result_type: result_type)
       end
 
-      def validate_method_body(method, parameters)
-        locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
-        validate_scalar(method.body, locals)
-      end
-
       def type_of(node, locals)
         case node
         when IR::NilLiteral, IR::Puts then :nil
         when IR::IntegerLiteral then :integer
         when IR::StringLiteral, IR::InterpolatedString then :string
         when IR::GetLine, IR::SafeChomp then :string_or_nil
-        when IR::LocalRead, IR::LocalWrite then local_type(node, locals)
-        when IR::NewObject then [:object, node.class_name]
-        when IR::MethodCall, IR::Sequence then node.result_type
+        when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
+        when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead then node.result_type
         end
       end
 
@@ -175,10 +210,7 @@ module Rubast
       end
 
       def string_like?(node, locals)
-        case type_of(node, locals)
-        when :string, :string_or_nil, :nil, :scalar then true
-        else false
-        end
+        %i[string string_or_nil nil scalar].include?(type_of(node, locals))
       end
 
       def validate_arguments(nodes, names, locals)

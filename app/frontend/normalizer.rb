@@ -15,8 +15,9 @@ module Rubast
         when Prism::ClassNode then normalize_class(node, source)
         when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode
           normalize_literal(node, source)
-        when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode
-          normalize_local(node, source)
+        when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
+             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode
+          normalize_variable(node, source)
         when Prism::InterpolatedStringNode
           IR::InterpolatedString.new(
             parts: node.parts.map { |part| normalize(part, source) }.freeze,
@@ -73,8 +74,12 @@ module Rubast
         end
       end
 
-      def normalize_local(node, source)
+      def normalize_variable(node, source)
         case node
+        when Prism::InstanceVariableWriteNode
+          IR::InstanceWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
+        when Prism::InstanceVariableReadNode
+          IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
         when Prism::LocalVariableWriteNode
           IR::LocalWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
         when Prism::LocalVariableReadNode

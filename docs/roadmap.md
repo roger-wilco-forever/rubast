@@ -4,7 +4,7 @@ Recorded on 2026-10-06. This is the agreed implementation order, not a claim tha
 
 ## Starting point
 
-The compiler supports `nil`, signed 64-bit integers, UTF-8 strings, top-level and method locals, `gets`, safe `chomp`, interpolation, `puts`, and stateless user classes. A class can be constructed without arguments; instance methods have required positional scalar arguments and an expression-sequence body with local assignment, `puts`, and last-expression returns. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Instance state and inheritance remain unsupported.
+The compiler supports `nil`, signed 64-bit integers, UTF-8 strings, top-level and method locals, `gets`, safe `chomp`, interpolation, `puts`, and user classes with constructors and scalar instance state. A class can be constructed with required positional scalar arguments when it defines `initialize`, or without arguments otherwise; instance methods have required positional scalar arguments and an expression-sequence body with local assignment, `puts`, and last-expression returns. Construction, method results, argument evaluation order, and parameter isolation are compared with CRuby. Unset instance variables read as `nil`; aliases share mutations, while separate instances have independent state. Inheritance and object-valued fields remain unsupported.
 
 ## Completion rule
 
@@ -52,11 +52,13 @@ Support local assignments, expression sequences, `puts` within methods, the last
 
 **Delivered:** sequence and `nil` IR forms, method-local scopes and initialization, expression-valued assignment and `puts`, and argument-specific body validation. Each assignment gets a separate Rust binding so later writes cannot change an earlier read. Argument types are captured during evaluation, before later arguments can reassign their source locals. [Method-body scenarios](../features/method_bodies.feature) cover these behaviors and diagnostics for invalid argument types and unsupported intermediate expressions in unused methods. The Greeter example now has a multi-expression body. `bin/verify` passed: RuboCop, 2 RSpec examples, 54 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
-### 3. Object state and constructors — planned
+### 3. Object state and constructors — complete (2026-10-07)
 
 Replace the stateless object tag with a shared object handle. Support `@variable` reads and writes and `initialize` with required positional scalar arguments. `new` invokes the constructor and returns the object regardless of the constructor's ordinary result. Initially, fields contain supported scalar values only.
 
 **Acceptance:** the milestone Greeter works; separate instances have separate state; aliases observe the same mutations; unassigned fields read as `nil`; constructor arguments execute once in order. Object-valued fields remain explicitly rejected.
+
+**Delivered:** constructor invocation, scalar instance-variable reads and writes, and shared object handles backed by per-runtime field maps. Analysis shares field types across aliases and captures read types before later writes; generated temporaries preserve receiver, argument, read, and call-result evaluation order. Explicit calls to private `initialize`, wrong constructor arity, object-valued fields, and top-level instance variables remain diagnostics. Objects are retained until runtime teardown; arbitrary object graphs and reclamation remain later work. The [Greeter example](../examples/greeter.rb) now meets the first milestone. [Object-state scenarios](../features/object_state.feature) cover these behaviors, nested constructor/receiver context, and invalid operations after an alias changes a field type. `bin/verify` passed: RuboCop, 2 RSpec examples, 69 Cucumber scenarios, Rust formatting, and Cargo tests (zero runtime unit assertions).
 
 ### 4. Instance calls and `self` — planned
 
@@ -160,4 +162,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 3 with differential scenarios for constructor arguments, instance-variable reads and writes, independent instances, aliases that share mutations, and unset fields returning `nil`. Keep later milestones planned until implementation and executed checks establish their behavior.
+Begin stage 4 with differential scenarios for explicit `self.method`, implicit instance calls, shared receiver state, and nested method-local isolation. Replace copied call-site bodies with separate generated functions. Keep later milestones planned until implementation and executed checks establish their behavior.

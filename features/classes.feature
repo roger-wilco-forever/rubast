@@ -90,20 +90,20 @@ Feature: Stateless user classes
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
 
     Examples:
-      | source                                                                                   |
-      | class Child < Object; def name; "child"; end; end                                          |
-      | class Stateful; def initialize; "init"; end; end                                          |
-      | class Stateful; def value; @value; end; end                                               |
-      | class Default; def value(input = "default"); input; end; end                              |
-      | class Keyword; def value(input:); input; end; end                                          |
-      | class Singleton; def self.value; 42; end; end                                              |
-      | class Duplicate; def value; 1; end; def value; 2; end; end                                  |
-      | class Reopened; def value; 1; end; end; class Reopened; def other; 2; end; end                |
-      | class String; def value; 1; end; end                                                      |
-      | class Greeter; def greet(name); name; end; end; puts Greeter.new.greet                     |
-      | class Greeter; def greet(name); name; end; end; puts Greeter.new.missing                   |
-      | class Greeter; def greet(name); name; end; end; puts Greeter.new("Ada")                     |
-      | class Greeter; def greet(name); name; end; end; puts Greeter.new                           |
-      | class Greeter; def greet(name); name; end; end; puts "#{Greeter.new}"                      |
-      | puts Future.new.value; class Future; def value; 1; end; end                                |
-      | class Hidden; def value; unknown; end; end                                               |
+      | source                                                                         |
+      | class Child < Object; def name; "child"; end; end                              |
+      | class Stateful; def initialize; "init"; end; end; Stateful.new.initialize      |
+      | class Stateful; def value; @value = self; end; end                             |
+      | class Default; def value(input = "default"); input; end; end                   |
+      | class Keyword; def value(input:); input; end; end                              |
+      | class Singleton; def self.value; 42; end; end                                  |
+      | class Duplicate; def value; 1; end; def value; 2; end; end                     |
+      | class Reopened; def value; 1; end; end; class Reopened; def other; 2; end; end |
+      | class String; def value; 1; end; end                                           |
+      | class Greeter; def greet(name); name; end; end; puts Greeter.new.greet         |
+      | class Greeter; def greet(name); name; end; end; puts Greeter.new.missing       |
+      | class Greeter; def greet(name); name; end; end; puts Greeter.new("Ada")        |
+      | class Greeter; def greet(name); name; end; end; puts Greeter.new               |
+      | class Greeter; def greet(name); name; end; end; puts "#{Greeter.new}"          |
+      | puts Future.new.value; class Future; def value; 1; end; end                    |
+      | class Hidden; def value; unknown; end; end                                     |

@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{self, Write};
 
 #[derive(Clone)]
@@ -5,8 +6,7 @@ pub enum Value {
     Nil,
     Integer(i64),
     String(String),
-    // ponytail: stateless objects need only a tag; add shared identity with instance state.
-    Object,
+    Object(usize),
 }
 
 impl Value {
@@ -15,16 +15,42 @@ impl Value {
             Self::Nil => String::new(),
             Self::Integer(number) => number.to_string(),
             Self::String(text) => text,
-            Self::Object => unreachable!("object string conversion is unsupported"),
+            Self::Object(_) => unreachable!("object string conversion is unsupported"),
         }
     }
 }
 
-pub struct Runtime;
+pub struct Runtime {
+    // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
+    objects: Vec<HashMap<&'static str, Value>>,
+}
 
 impl Runtime {
     pub fn new() -> Self {
-        Self
+        Self {
+            objects: Vec::new(),
+        }
+    }
+
+    pub fn new_object(&mut self) -> Value {
+        let id = self.objects.len();
+        self.objects.push(HashMap::new());
+        Value::Object(id)
+    }
+
+    pub fn get_ivar(&self, receiver: &Value, name: &'static str) -> Value {
+        let Value::Object(id) = receiver else {
+            unreachable!("instance variables require an object");
+        };
+        self.objects[*id].get(name).cloned().unwrap_or(Value::Nil)
+    }
+
+    pub fn set_ivar(&mut self, receiver: &Value, name: &'static str, value: Value) -> Value {
+        let Value::Object(id) = receiver else {
+            unreachable!("instance variables require an object");
+        };
+        self.objects[*id].insert(name, value.clone());
+        value
     }
 
     pub fn gets(&mut self) -> Value {
@@ -54,7 +80,7 @@ impl Runtime {
                 text.truncate(text.len() - suffix_bytes);
                 Value::String(text)
             }
-            Value::Integer(_) | Value::Object => {
+            Value::Integer(_) | Value::Object(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }
         }
