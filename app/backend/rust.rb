@@ -39,6 +39,7 @@ module Rubast
         case node
         when IR::MethodCall then [[node.class_name, node.name, nested]]
         when IR::NewObject then [[node.class_name, :initialize, nested]]
+        when IR::Builtin then [[node.family, node.name, nested]]
         else nested
         end
       end
@@ -53,7 +54,7 @@ module Rubast
         when IR::BooleanLiteral then "Value::Bool(#{node.value})"
         when IR::NilLiteral then "Value::Nil"
         when IR::IntegerLiteral then "Value::Integer(#{node.value})"
-        when IR::StringLiteral then "Value::String(#{rust_string(node.value)}.to_owned())"
+        when IR::StringLiteral then "Value::from(#{rust_string(node.value)}.to_owned())"
         end
       end
 
@@ -139,9 +140,34 @@ module Rubast
         end
       end
 
+      module Collections
+        private
+
+        def emit_allocation_or_call(node, lines)
+          if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::Builtin)
+            emit_collection(node, lines)
+          else
+            emit_object(node, lines)
+          end
+        end
+
+        def emit_collection(node, lines)
+          if node.is_a?(IR::ArrayLiteral)
+            elements = node.elements.map { |element| emit_value(emit_expression(element, lines), lines) }
+            return emit_value("runtime.new_array(vec![#{elements.join(', ')}])", lines)
+          end
+          receiver = emit_value(emit_expression(node.receiver, lines), lines)
+          arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+          inputs = "#{Rust.rust_string(node.name.to_s)}, #{receiver}, vec![#{arguments.join(', ')}]"
+          target = node.family == :array ? "runtime.array_operation" : "Runtime::string_operation"
+          emit_value("#{target}(#{inputs})", lines)
+        end
+      end
+
       class Emitter
         include ControlFlow
         include Loops
+        include Collections
 
         def initialize(functions)
           @functions = functions
@@ -187,7 +213,7 @@ module Rubast
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
-          when IR::NewObject, IR::MethodCall then emit_object(node, lines)
+          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::Builtin then emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"

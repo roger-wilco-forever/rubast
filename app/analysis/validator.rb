@@ -48,7 +48,7 @@ module Rubast
           when IR::NilLiteral then :nil
           when IR::IntegerLiteral then IR::IntegerType.new(minimum: node.value, maximum: node.value)
           when IR::BooleanLiteral then :boolean
-          when IR::StringLiteral then :string
+          when IR::StringLiteral then node.frozen ? :frozen_string : :string
           end
         end
 
@@ -56,7 +56,7 @@ module Rubast
           case node
           when IR::Return then :never
           when IR::GetLine then :string_or_nil
-          when IR::SafeChomp then continuing_type(node.receiver, locals, :string_or_nil)
+          when IR::SafeChomp then safe_chomp_type(node, locals)
           when IR::Puts then continuing_type(node.value, locals, :nil)
           when IR::InterpolatedString then continuing_type(node.parts, locals, :string)
           end
@@ -108,7 +108,7 @@ module Rubast
           return unless %i[== !=].include?(node.name) && types.last.is_a?(IR::ObjectType)
 
           # Integer/String equality can call the right object's operator; add delegation with its own contract.
-          delegates = members(types.first).any? { |type| type.is_a?(IR::IntegerType) || type == :string }
+          delegates = members(types.first).any? { |type| type.is_a?(IR::IntegerType) || string_type?(type) }
           unsupported(node) if delegates
         end
 
@@ -327,6 +327,7 @@ module Rubast
           receiver = validate_expression(node.receiver || IR::SelfRead.new(result_type: nil, span: node.span), locals)
           type = type_of(receiver, locals)
           return defer_call(node, receiver, locals) if type == :unknown
+          return validate_collection_call(node, receiver, type, locals) if collection_call?(node, type)
           return validate_operation(node, receiver, type, locals) unless type.is_a?(IR::ObjectType)
 
           unsupported(node) if node.name == :initialize
@@ -374,6 +375,7 @@ module Rubast
         include Inheritance
         include InstanceState
         include LoopAnalysis
+        include Collections
 
         def call(program)
           @classes = {}
@@ -442,10 +444,14 @@ module Rubast
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
-          when IR::Call then validate_call(node, locals)
-          when IR::Super then validate_super(node, locals)
+          when IR::Call, IR::Super then validate_dispatch(node, locals)
+          when IR::ArrayLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
           else unsupported(node)
           end
+        end
+
+        def validate_dispatch(node, locals)
+          node.is_a?(IR::Call) ? validate_call(node, locals) : validate_super(node, locals)
         end
 
         def validate_call(node, locals)
@@ -521,7 +527,7 @@ module Rubast
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
-             IR::Loop
+             IR::Loop, IR::ArrayLiteral, IR::IndexWrite, IR::Builtin
           node.result_type
         end
       end
@@ -539,7 +545,7 @@ module Rubast
       end
 
       def string_like?(node, locals)
-        members(type_of(node, locals)).all? { |type| %i[string nil unknown never].include?(type) }
+        members(type_of(node, locals)).all? { |type| %i[string frozen_string nil unknown never].include?(type) }
       end
 
       def validate_arguments(nodes, names, locals)

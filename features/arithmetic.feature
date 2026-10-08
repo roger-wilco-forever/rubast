@@ -135,8 +135,15 @@ Feature: Preserve scalar comparisons and bounded integer arithmetic
       | puts -9223372036854775808 / -1                                                | E_INTEGER_RANGE |
       | puts 1 / 0                                                                    | E_UNSUPPORTED   |
       | puts 1 % 0                                                                    | E_UNSUPPORTED   |
-      | puts "Ada" + "Zoë"                                                            | E_UNSUPPORTED   |
       | puts true + 1                                                                 | E_UNSUPPORTED   |
       | puts nil < 1                                                                  | E_UNSUPPORTED   |
       | puts 2 ** 3                                                                   | E_UNSUPPORTED   |
       | class Number; def add(value); value + 1; end; end; puts Number.new.add("Ada") | E_UNSUPPORTED   |
+
+  Scenario: String addition now executes rather than receiving an arithmetic diagnostic
+    Given the Ruby source is:
+      """
+      puts "Ada" + "Zoë"
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

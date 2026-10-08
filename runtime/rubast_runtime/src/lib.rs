@@ -1,12 +1,14 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::rc::Rc;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum Value {
     Nil,
     Bool(bool),
     Integer(i64),
-    String(String),
+    String(Rc<RefCell<String>>),
     Object(usize),
 }
 
@@ -23,15 +25,26 @@ impl Value {
             Self::Nil => String::new(),
             Self::Bool(value) => value.to_string(),
             Self::Integer(number) => number.to_string(),
-            Self::String(text) => text,
+            Self::String(text) => text.borrow().clone(),
             Self::Object(_) => unreachable!("object string conversion is unsupported"),
         }
     }
 }
 
+impl From<String> for Value {
+    fn from(text: String) -> Self {
+        Self::String(Rc::new(RefCell::new(text)))
+    }
+}
+
+enum Object {
+    Instance(HashMap<&'static str, Value>),
+    Array(Vec<Value>),
+}
+
 pub struct Runtime {
     // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
-    objects: Vec<HashMap<&'static str, Value>>,
+    objects: Vec<Object>,
 }
 
 impl Runtime {
@@ -94,22 +107,81 @@ impl Runtime {
 
     pub fn new_object(&mut self) -> Value {
         let id = self.objects.len();
-        self.objects.push(HashMap::new());
+        self.objects.push(Object::Instance(HashMap::new()));
         Value::Object(id)
+    }
+
+    pub fn new_array(&mut self, values: Vec<Value>) -> Value {
+        let id = self.objects.len();
+        self.objects.push(Object::Array(values));
+        Value::Object(id)
+    }
+
+    pub fn array_operation(
+        &mut self,
+        name: &str,
+        receiver: Value,
+        mut arguments: Vec<Value>,
+    ) -> Value {
+        let Value::Object(id) = receiver else {
+            unreachable!("array operations require a proven array receiver");
+        };
+        let Object::Array(values) = &mut self.objects[id] else {
+            unreachable!("array operations require array storage");
+        };
+        match name {
+            "length" => Value::Integer(values.len().try_into().expect("array length fits i64")),
+            "!" => Value::Bool(false),
+            "push" | "<<" => {
+                values.extend(arguments);
+                Value::Object(id)
+            }
+            "[]" | "[]=" => {
+                let index = arguments.remove(0).into_integer();
+                let index = if index < 0 {
+                    values.len() as i128 + index
+                } else {
+                    index
+                };
+                if name == "[]" {
+                    usize::try_from(index)
+                        .ok()
+                        .and_then(|slot| values.get(slot))
+                        .cloned()
+                        .unwrap_or(Value::Nil)
+                } else {
+                    let index = usize::try_from(index)
+                        .expect("analysis proves a nonnegative bounded write index");
+                    let value = arguments.remove(0);
+                    if index >= values.len() {
+                        values.resize(index + 1, Value::Nil);
+                    }
+                    values[index] = value.clone();
+                    value
+                }
+            }
+            _ => unreachable!("unknown array operation"),
+        }
     }
 
     pub fn get_ivar(&self, receiver: &Value, name: &'static str) -> Value {
         let Value::Object(id) = receiver else {
             unreachable!("instance variables require an object");
         };
-        self.objects[*id].get(name).cloned().unwrap_or(Value::Nil)
+        let Object::Instance(fields) = &self.objects[*id] else {
+            unreachable!("instance variables require instance storage");
+        };
+        fields.get(name).cloned().unwrap_or(Value::Nil)
     }
 
     pub fn set_ivar(&mut self, receiver: &Value, name: &'static str, value: Value) -> Value {
         let Value::Object(id) = receiver else {
             unreachable!("instance variables require an object");
         };
-        self.objects[*id].insert(name, value.clone());
+        let Object::Instance(fields) = &mut self.objects[*id] else {
+            unreachable!("instance variables require instance storage");
+        };
+        fields.insert(name, value.clone());
         value
     }
 
@@ -122,23 +194,17 @@ impl Runtime {
         if bytes_read == 0 {
             Value::Nil
         } else {
-            Value::String(line)
+            Value::from(line)
         }
     }
 
     pub fn safe_chomp(value: Value) -> Value {
         match value {
             Value::Nil => Value::Nil,
-            Value::String(mut text) => {
-                let suffix_bytes = if text.ends_with("\r\n") {
-                    2
-                } else if text.ends_with('\n') || text.ends_with('\r') {
-                    1
-                } else {
-                    0
-                };
-                text.truncate(text.len() - suffix_bytes);
-                Value::String(text)
+            Value::String(text) => {
+                let mut copy = text.borrow().clone();
+                Self::chomp_text(&mut copy);
+                Value::from(copy)
             }
             Value::Bool(_) | Value::Integer(_) | Value::Object(_) => {
                 unreachable!("safe_chomp requires a string or nil")
@@ -151,7 +217,74 @@ impl Runtime {
         for part in parts {
             text.push_str(&part.into_ruby_string());
         }
-        Value::String(text)
+        Value::from(text)
+    }
+
+    fn chomp_text(text: &mut String) -> bool {
+        let suffix_bytes = if text.ends_with("\r\n") {
+            2
+        } else if text.ends_with('\n') || text.ends_with('\r') {
+            1
+        } else {
+            0
+        };
+        text.truncate(text.len() - suffix_bytes);
+        suffix_bytes != 0
+    }
+
+    pub fn string_operation(name: &str, receiver: Value, mut arguments: Vec<Value>) -> Value {
+        let Value::String(text) = receiver else {
+            unreachable!("string operations require a proven string receiver");
+        };
+        match name {
+            "length" => Value::Integer(
+                text.borrow()
+                    .chars()
+                    .count()
+                    .try_into()
+                    .expect("string length fits i64"),
+            ),
+            "bytesize" => Value::Integer(
+                text.borrow()
+                    .len()
+                    .try_into()
+                    .expect("string bytesize fits i64"),
+            ),
+            "dup" => Value::from(text.borrow().clone()),
+            "chomp" => Self::safe_chomp(Value::String(text)),
+            "chomp!" => {
+                let changed = Self::chomp_text(&mut text.borrow_mut());
+                if changed {
+                    Value::String(text)
+                } else {
+                    Value::Nil
+                }
+            }
+            "clear" => {
+                text.borrow_mut().clear();
+                Value::String(text)
+            }
+            "+" | "<<" | "concat" | "replace" => {
+                let Value::String(other) = arguments.remove(0) else {
+                    unreachable!("string operations require a proven string argument");
+                };
+                // Capture bytes first: self-append must not overlap immutable and mutable RefCell borrows.
+                let other = other.borrow().clone();
+                if name == "+" {
+                    let mut result = text.borrow().clone();
+                    result.push_str(&other);
+                    Value::from(result)
+                } else {
+                    if name == "replace" {
+                        *text.borrow_mut() = other;
+                    } else {
+                        text.borrow_mut().push_str(&other);
+                    }
+                    Value::String(text)
+                }
+            }
+            _ => unreachable!("unknown string operation"),
+        }
     }
 
     pub fn puts(&mut self, value: Value) {

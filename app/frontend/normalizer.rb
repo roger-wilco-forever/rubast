@@ -78,7 +78,11 @@ module Rubast
           when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
           when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
           when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
-          when Prism::StringNode then IR::StringLiteral.new(value: node.unescaped, span: span(node, source))
+          when Prism::StringNode
+            IR::StringLiteral.new(value: node.unescaped, frozen: node.frozen?, span: span(node, source))
+          when Prism::ArrayNode
+            IR::ArrayLiteral.new(elements: node.elements.map { |element| normalize(element, source) }.freeze,
+                                 result_type: nil, span: span(node, source))
           end
         end
 
@@ -119,7 +123,49 @@ module Rubast
         end
       end
 
+      module Calls
+        private
+
+        def normalize_call(node, source)
+          unsupported(node, source) if node.attribute_write?
+          unsupported(node.block, source) if node.block
+
+          IR::Call.new(
+            name: node.name,
+            receiver: node.receiver && normalize(node.receiver, source),
+            arguments: (node.arguments&.arguments || []).map { |arg| normalize(arg, source) }.freeze,
+            safe_navigation: node.call_operator_loc&.slice == "&.",
+            span: span(node, source)
+          )
+        end
+
+        def normalize_index_write(node, source)
+          unsupported(node, source) if node.call_operator_loc&.slice == "&."
+          arguments = node.arguments&.arguments || []
+          unsupported(node, source) unless arguments.length == 2 && node.receiver && !node.block
+          IR::IndexWrite.new(receiver: normalize(node.receiver, source), index: normalize(arguments.first, source),
+                             value: normalize(arguments.last, source), result_type: nil, span: span(node, source))
+        end
+
+        def normalize_invocation(node, source)
+          if node.is_a?(Prism::CallNode) && node.attribute_write? && node.name == :[]=
+            return normalize_index_write(node, source)
+          end
+
+          node.is_a?(Prism::CallNode) ? normalize_call(node, source) : normalize_super(node, source)
+        end
+
+        def normalize_super(node, source)
+          unsupported(node.block, source) if node.block
+          forward = node.is_a?(Prism::ForwardingSuperNode)
+          arguments = forward ? [] : (node.arguments&.arguments || [])
+          IR::Super.new(arguments: arguments.map { |argument| normalize(argument, source) }.freeze,
+                        forward_arguments: forward, span: span(node, source))
+        end
+      end
+
       include Expressions
+      include Calls
 
       private
 
@@ -134,7 +180,8 @@ module Rubast
       def normalize(node, source)
         case node
         when Prism::ClassNode then normalize_class(node, source)
-        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode
+        when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode,
+             Prism::ArrayNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
              Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode,
@@ -185,31 +232,6 @@ module Rubast
         parameters.requireds.each do |parameter|
           unsupported(parameter, source) unless parameter.is_a?(Prism::RequiredParameterNode)
         end
-      end
-
-      def normalize_call(node, source)
-        unsupported(node, source) if node.attribute_write?
-        unsupported(node.block, source) if node.block
-
-        IR::Call.new(
-          name: node.name,
-          receiver: node.receiver && normalize(node.receiver, source),
-          arguments: (node.arguments&.arguments || []).map { |arg| normalize(arg, source) }.freeze,
-          safe_navigation: node.call_operator_loc&.slice == "&.",
-          span: span(node, source)
-        )
-      end
-
-      def normalize_invocation(node, source)
-        node.is_a?(Prism::CallNode) ? normalize_call(node, source) : normalize_super(node, source)
-      end
-
-      def normalize_super(node, source)
-        unsupported(node.block, source) if node.block
-        forward = node.is_a?(Prism::ForwardingSuperNode)
-        arguments = forward ? [] : (node.arguments&.arguments || [])
-        IR::Super.new(arguments: arguments.map { |argument| normalize(argument, source) }.freeze,
-                      forward_arguments: forward, span: span(node, source))
       end
 
       def unsupported(node, source)
