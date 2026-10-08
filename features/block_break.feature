@@ -374,14 +374,13 @@ Feature: Break from literal blocks
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Nonlocal returns from a block remain unsupported
+  Scenario: Nonlocal returns from a block exit the defining method
     Given the Ruby source is:
       """
       class Caller; def run; 1.times { return 7 }; end; end
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Unreachable breaks do not accept non-fallthrough bodies
     Given the Ruby source is:

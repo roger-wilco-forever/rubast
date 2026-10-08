@@ -50,7 +50,6 @@ module Rubast
         end
 
         def normalize_return(node, source)
-          unsupported(node, source) if block_scope?
           IR::Return.new(value: normalize_control_value(node, source), span: span(node, source))
         end
 

@@ -9,15 +9,11 @@ module Rubast
         @scopes.fetch(-1 - node.depth).fetch(:names).fetch(node.name)
       end
 
-      def block_scope?
-        @scopes.last.fetch(:block)
-      end
-
       def in_scope(names, block: false)
         previous = @scopes
         @scope_serial += 1
         map = names.to_h { |name| [name, block ? [@scope_serial, name].freeze : name] }
-        scope = { names: map, block: block }
+        scope = { names: map }
         @scopes = block ? [*previous, scope] : [scope]
         yield map.values.freeze
       ensure

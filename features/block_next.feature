@@ -372,14 +372,13 @@ Feature: Next from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
     And no Rust project was created
 
-  Scenario: Nonlocal return remains unsupported
+  Scenario: Nonlocal return exits the defining method
     Given the Ruby source is:
       """
       class Caller; def run; 1.times { return 7 }; end; end
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: The invoice label example builds independently
     Given I use the example "invoice_labels.rb"

@@ -38,7 +38,7 @@ module Rubast
         end
 
         def loop_exit_lists
-          [@return_exits, @loop_context&.fetch(:break), @loop_context&.fetch(:next), *block_exit_lists].compact
+          [@loop_context&.fetch(:break), @loop_context&.fetch(:next), *block_exit_lists].compact
         end
 
         def validate_loop_exit(node, locals)

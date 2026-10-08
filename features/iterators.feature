@@ -266,7 +266,6 @@ Feature: Bounded inline iterators with lexical block locals
       | [1].each(2) { puts 1 }                                                                      |
       | "Ada".each { puts 1 }                                                                      |
       | {}.each { puts 1 }                                                                          |
-      | class Example; def go; [1].each { return 1 }; end; end; Example.new.go                        |
       | values = [1]; values.each { values.push(2) }                                                 |
       | [1].each { [] }                                                                            |
       | [1].map { {} }                                                                             |
@@ -277,6 +276,14 @@ Feature: Bounded inline iterators with lexical block locals
       | 33.times { 33.times { puts 1 } }                                                            |
       | [1].each { while true; end }                                                               |
       | [].each { "Ada" + 1 }                                                                     |
+
+  Scenario: Return from an iterator exits its defining method
+    Given the Ruby source is:
+      """
+      class Example; def go; [1].each { return 1 }; end; end; Example.new.go
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Bare super in a block forwards method parameters despite block shadowing
     Given the Ruby source is:

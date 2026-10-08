@@ -209,13 +209,17 @@ module Rubast
           when IR::Conditional then validate_conditional(node, locals)
           when IR::Loop then validate_loop(node, locals)
           when IR::LoopExit then validate_loop_exit(node, locals)
-          when IR::Return
-            unsupported(node) unless @return_exits
-            value = validate_expression(node.value, locals)
-            type = type_of(value, locals)
-            @return_exits << [type, snapshot(locals)] unless type == :never
-            node.with(value: value)
+          when IR::Return then validate_return(node, locals)
           end
+        end
+
+        def validate_return(node, locals)
+          unsupported(node) unless @return_context
+          value = validate_expression(node.value, locals)
+          type = type_of(value, locals)
+          check_exiting_traversals(node)
+          @return_context.fetch(:exits) << [type, control_exit_state(@return_context, locals)] unless type == :never
+          node.with(value: value)
         end
 
         def validate_sequence(node, locals)
@@ -343,7 +347,7 @@ module Rubast
 
         def validate_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
-          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
+          saved_context = [@receiver_type, @active_methods, @method_context, @loop_context,
                            @yield_context, @block_exit_context, @block_next_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
@@ -354,17 +358,18 @@ module Rubast
           @loop_context = nil
           @block_exit_context = nil
           @block_next_context = nil
-          @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
-          body = validate_expression(method.body, locals)
-          method_result(body, locals, origin)
+          with_return_context(locals) do
+            body = validate_expression(method.body, locals)
+            method_result(body, locals, origin)
+          end
         ensure
-          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
+          @receiver_type, @active_methods, @method_context, @loop_context,
             @yield_context, @block_exit_context, @block_next_context = saved_context
         end
 
         def method_result(body, locals, origin)
-          exits = @return_exits + (@yield_context&.fetch(:exits) || [])
+          exits = @return_context.fetch(:exits) + (@yield_context&.fetch(:exits) || [])
           types = exits.map(&:first)
           states = exits.map(&:last)
           unless body.result_type == :never

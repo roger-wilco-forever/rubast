@@ -275,7 +275,7 @@ Feature: Yield to literal blocks in user instance methods
     Then the diagnostic has code "E_UNSUPPORTED" at line 2
     And no Rust project was created
 
-  Scenario: Nonlocal return remains unsupported
+  Scenario: Return from a top-level block has no supported defining method
     Given the Ruby source is:
       """
       class Producer; def run; yield; end; end

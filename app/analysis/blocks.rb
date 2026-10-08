@@ -31,6 +31,16 @@ module Rubast
           @block_next_context = saved
         end
 
+        def with_return_context(locals)
+          saved = @return_context
+          @return_context = { locals: locals, exits: [], capture_depth: @captured_scopes.length }
+          @block_exit_contexts << @return_context
+          yield
+        ensure
+          @block_exit_contexts.pop
+          @return_context = saved
+        end
+
         def block_exit_lists
           @block_exit_contexts.map { |context| context.fetch(:exits) }
         end
@@ -50,7 +60,9 @@ module Rubast
           value = validate_expression(node.value, locals)
           type = type_of(value, locals)
           check_exiting_traversals(node)
-          @block_exit_context.fetch(:exits) << [type, block_exit_state(locals)] unless type == :never
+          unless type == :never
+            @block_exit_context.fetch(:exits) << [type, control_exit_state(@block_exit_context, locals)]
+          end
           IR::BlockExit.new(target: @block_exit_context.fetch(:id), value: value, span: node.span)
         end
 
@@ -71,11 +83,11 @@ module Rubast
           end
         end
 
-        def block_exit_state(locals)
-          root = @block_exit_context.fetch(:locals)
+        def control_exit_state(context, locals)
+          root = context.fetch(:locals)
           state = snapshot(locals)
           state[:locals] = locals.slice(*root.keys)
-          state[:captures] = state.fetch(:captures).take(@block_exit_context.fetch(:capture_depth))
+          state[:captures] = state.fetch(:captures).take(context.fetch(:capture_depth))
           state.fetch(:captures).each do |scope, values|
             values.replace(state.fetch(:locals)) if scope.equal?(root)
           end
@@ -116,11 +128,11 @@ module Rubast
         end
 
         def yielding_body(context, type)
-          saved = [@receiver_type, @method_context, @yield_context]
-          @receiver_type, @method_context, @yield_context = context.fetch(:lexical)
+          saved = [@receiver_type, @method_context, @yield_context, @return_context]
+          @receiver_type, @method_context, @yield_context, @return_context = context.fetch(:lexical)
           iterator_body(context.fetch(:block), type, context.fetch(:locals), exit_context: context)
         ensure
-          @receiver_type, @method_context, @yield_context = saved
+          @receiver_type, @method_context, @yield_context, @return_context = saved
         end
 
         def check_ignored_block(context)
@@ -170,7 +182,7 @@ module Rubast
         unsupported(node) unless node.call.arguments.length == method.parameters.length
         arguments, parameters = validate_arguments(node.call.arguments, method.parameters, locals)
         context = new_block_context(node.block, locals)
-        context[:lexical] = [@receiver_type, @method_context, @yield_context]
+        context[:lexical] = [@receiver_type, @method_context, @yield_context, @return_context]
         @captured_scopes << locals
         context[:capture_depth] = @captured_scopes.length
         body = user_block_body(node, type, target, parameters, context)
