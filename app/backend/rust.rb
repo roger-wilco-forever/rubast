@@ -40,6 +40,7 @@ module Rubast
         when IR::MethodCall then [[node.class_name, node.name, nested]]
         when IR::NewObject then [[node.class_name, :initialize, nested]]
         when IR::Builtin then [[node.family, node.name, nested]]
+        when IR::Iterator then [[node.family, node.name, node.steps.length, nested]]
         else nested
         end
       end
@@ -145,6 +146,8 @@ module Rubast
         private
 
         def emit_allocation_or_call(node, lines)
+          return emit_iterator(node, lines) if node.is_a?(IR::Iterator)
+
           if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral) || node.is_a?(IR::Builtin)
             emit_collection(node, lines)
           else
@@ -175,6 +178,7 @@ module Rubast
         include ControlFlow
         include Loops
         include Collections
+        include Iterators
 
         def initialize(functions)
           @functions = functions
@@ -221,7 +225,7 @@ module Rubast
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
-          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin
+          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin, IR::Iterator
             emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit
             emit_flow(node, lines)

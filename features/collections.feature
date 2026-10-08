@@ -317,7 +317,6 @@ Feature: Share array storage and mutable UTF-8 strings
       | values = []; puts values                                                                          |
       | values = []; puts "#{values}"                                                                    |
       | values = [1]; puts values == [1]                                                                   |
-      | values = [1]; values.each { puts 1 }                                                               |
       | values = [1]; values[0] += 1                                                                       |
       | class Cell; end; values = [Cell.new, Cell.new]; index = if gets; 0; else; 1; end; values[index]       |
       | values = []; while gets; values.push(1); end                                                       |
@@ -366,4 +365,12 @@ Feature: Share array storage and mutable UTF-8 strings
     When I emit a Rust project
     Then the emitted project contains its source and runtime
     When I build and run the emitted project
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Array each now executes rather than receiving a collection diagnostic
+    Given the Ruby source is:
+      """
+      values = [1]; values.each { puts 1 }
+      """
+    When I run Rubast
     Then stdout, stderr, and exit status match CRuby

@@ -25,6 +25,10 @@ module Rubast
     InstanceWrite = Data.define(:name, :value, :span)
     MethodCall = Data.define(:class_name, :name, :receiver, :arguments, :parameters, :locals, :body, :result_type,
                              :span)
+    Block = Data.define(:parameters, :locals, :body, :span)
+    BlockCall = Data.define(:call, :block, :result_type, :span)
+    Iterator = Data.define(:name, :family, :receiver, :parameters, :locals, :steps, :result_type, :span)
+    BlockStep = Data.define(:index, :body, :span)
     Call = Data.define(:name, :receiver, :arguments, :safe_navigation, :span)
     Super = Data.define(:arguments, :forward_arguments, :span)
     IntegerLiteral = Data.define(:value, :span)

@@ -88,7 +88,11 @@ module Rubast
         private
 
         def validate_dispatch(node, locals)
-          node.is_a?(IR::Call) ? validate_call(node, locals) : validate_super(node, locals)
+          case node
+          when IR::Call then validate_call(node, locals)
+          when IR::BlockCall then validate_iterator(node, locals)
+          else validate_super(node, locals)
+          end
         end
 
         def validate_operation(node, receiver, receiver_type, locals)
@@ -383,6 +387,7 @@ module Rubast
         include LoopAnalysis
         include Collections
         include Hashes
+        include Iterators
 
         def call(program)
           @classes = {}
@@ -452,7 +457,7 @@ module Rubast
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
-          when IR::Call, IR::Super then validate_dispatch(node, locals)
+          when IR::Call, IR::Super, IR::BlockCall then validate_dispatch(node, locals)
           when IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
           else unsupported(node)
           end
@@ -532,7 +537,7 @@ module Rubast
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
-             IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin
+             IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator
           node.result_type
         end
       end

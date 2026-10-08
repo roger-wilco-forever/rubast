@@ -4,9 +4,17 @@ module Rubast
   module Frontend
     class Normalizer
       def call(parsed, source)
-        ast = parsed.value
-        IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze,
-                        locals: ast.locals.freeze, warnings: normalize_warnings(parsed, source))
+        Session.new.call(parsed, source)
+      end
+
+      class Session < Normalizer
+        def call(parsed, source)
+          ast = parsed.value
+          @scopes = [{ names: ast.locals.to_h { |name| [name, name] }, block: false }]
+          @scope_serial = 0
+          IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze,
+                          locals: ast.locals.freeze, warnings: normalize_warnings(parsed, source))
+        end
       end
 
       module Expressions
@@ -32,7 +40,7 @@ module Rubast
         end
 
         def normalize_loop_exit(node, source)
-          value = normalize_return(node, source).value
+          value = normalize_control_value(node, source)
           IR::LoopExit.new(kind: node.is_a?(Prism::BreakNode) ? :break : :next, value: value, span: span(node, source))
         end
 
@@ -42,10 +50,14 @@ module Rubast
         end
 
         def normalize_return(node, source)
+          unsupported(node, source) if block_scope?
+          IR::Return.new(value: normalize_control_value(node, source), span: span(node, source))
+        end
+
+        def normalize_control_value(node, source)
           arguments = node.arguments&.arguments || []
           unsupported(node, source) if arguments.length > 1
-          value = arguments.empty? ? IR::NilLiteral.new(span: span(node, source)) : normalize(arguments.first, source)
-          IR::Return.new(value: value, span: span(node, source))
+          arguments.empty? ? IR::NilLiteral.new(span: span(node, source)) : normalize(arguments.first, source)
         end
 
         def normalize_conditional(node, source)
@@ -79,9 +91,9 @@ module Rubast
           when Prism::InstanceVariableReadNode
             IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
           when Prism::LocalVariableWriteNode
-            IR::LocalWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
+            IR::LocalWrite.new(name: local_name(node), value: normalize(node.value, source), span: span(node, source))
           when Prism::LocalVariableReadNode
-            IR::LocalRead.new(name: node.name, span: span(node, source))
+            IR::LocalRead.new(name: local_name(node), span: span(node, source))
           when Prism::LocalVariableOperatorWriteNode, Prism::InstanceVariableOperatorWriteNode
             normalize_operator_write(node, source)
           end
@@ -92,12 +104,13 @@ module Rubast
           receiver = if instance
                        IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
                      else
-                       IR::LocalRead.new(name: node.name, span: span(node, source))
+                       IR::LocalRead.new(name: local_name(node), span: span(node, source))
                      end
           value = IR::Call.new(name: node.binary_operator, receiver: receiver,
                                arguments: [normalize(node.value, source)].freeze,
                                safe_navigation: false, span: span(node, source))
-          (instance ? IR::InstanceWrite : IR::LocalWrite).new(name: node.name, value: value, span: span(node, source))
+          name = instance ? node.name : local_name(node)
+          (instance ? IR::InstanceWrite : IR::LocalWrite).new(name: name, value: value, span: span(node, source))
         end
 
         def normalize_embedded(node, source)
@@ -145,8 +158,12 @@ module Rubast
 
         def normalize_call(node, source)
           unsupported(node, source) if node.attribute_write?
-          unsupported(node.block, source) if node.block
+          return normalize_block_call(node, source) if node.block
 
+          normalize_plain_call(node, source)
+        end
+
+        def normalize_plain_call(node, source)
           IR::Call.new(
             name: node.name,
             receiver: node.receiver && normalize(node.receiver, source),
@@ -181,6 +198,7 @@ module Rubast
         end
       end
 
+      include BlockScopes
       include Expressions
       include Literals
       include Calls
@@ -238,7 +256,7 @@ module Rubast
 
       def normalize_method_body(node, source)
         unsupported(node.body, source) if node.body && !node.body.is_a?(Prism::StatementsNode)
-        normalize_sequence(node.body, node, source)
+        in_scope(node.locals) { normalize_sequence(node.body, node, source) }
       end
 
       def normalize_parameters(parameters, source)

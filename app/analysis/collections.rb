@@ -36,6 +36,7 @@ module Rubast
         def array_result(node, array, types)
           return array.fields.fetch(:length) if node.name == :length
           return :boolean if node.name == :!
+          return unknown_array_result(node, array, types) if array.fields[:length] == :unknown
 
           length = array_length(array, node)
           case node.name
@@ -44,6 +45,14 @@ module Rubast
           when :push, :<< then array_push_type(types, array, length, node)
           else unsupported(node)
           end
+        end
+
+        def unknown_array_result(node, array, types)
+          return array unless %i[[] []=].include?(node.name)
+
+          index = types.fetch(0)
+          unsupported(node) unless index == :unknown || index.is_a?(IR::IntegerType)
+          node.name == :[]= ? types.fetch(1) : :unknown
         end
 
         def array_read_type(index, array, length, origin)
