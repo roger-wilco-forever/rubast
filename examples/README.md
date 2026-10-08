@@ -6,9 +6,9 @@ The small examples at the root demonstrate supported constructs: [interactive in
 
 ## Realistic workload corpus
 
-The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All six run successfully on CRuby with the documented inputs; four currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All seven run successfully on CRuby with the documented inputs; five currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after stage 7 on 2026-10-07:
+Observed after stage 7 on 2026-10-08:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
@@ -18,8 +18,11 @@ Observed after stage 7 on 2026-10-07:
 | [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 16 | `ArrayNode` | Array storage/append, `Array#sum`, symbols, and Symbol-to-Proc block conversion (stages 9–11; each needs a supported-call contract) |
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |
 | [unit_pricing.rb](workloads/unit_pricing.rb) | Divide a subtotal by quantity and return a message for an invalid quantity | `E_UNSUPPORTED`, line 11 | Division is rejected for zero even though an earlier guard returns | Predicate/range narrowing or proven unreachable-path handling; conservative analysis currently checks the division path |
+| [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | `E_UNSUPPORTED`, line 4 | Singleton `DefNode` (`def self.defs`) | Class methods and class-body execution/state (stage 14), arrays/concatenation/indexing/equality, symbols/hashes (stages 9–10), `nil?`, and `p` (stage 16); each needs its own contract |
 
 The first diagnostic can hide subsequent blockers. For example, accepting array syntax would not make Symbol-to-Proc aggregation work automatically. The notification and unit-pricing examples exercise analysis limits even though their syntax already normalizes successfully. Keep these programs intact when implementing support; do not remove useful constructs merely to turn a row green.
+
+The registry preserves the supplied Ruby source. `@defs` is an instance variable of each class object, not a shared `@@` variable. `Child.defs` explicitly falls back to `Base.defs`; inherited class methods must retain the actual class receiver. The supplied fixture only calls `Base.defs` and prints `true`. Subclass fallback, `add`, `clear`, and retained array aliases need additional execution cases before claiming the full registry contract.
 
 ## Run and inspect
 
@@ -56,6 +59,13 @@ printf 'sms\n' | ruby examples/workloads/notification.rb
 
 The remaining examples need no input. Shopping-cart output is `total:4900 cents`. Unit pricing prints `3333`, then `quantity must be at least 1`; CRuby does not divide by zero because the guard returns first.
 
+```sh
+ruby examples/workloads/class_definitions.rb
+# true
+bundle exec ruby bin/rubast run examples/workloads/class_definitions.rb
+# E_UNSUPPORTED at line 4; exit status 2
+```
+
 ## Track progress
 
 [The Cucumber corpus](../features/realistic_examples.feature) checks invoice and shipping execution against CRuby and pins reference outputs for every program. Currently unsupported cases assert the diagnostic code, Ruby line, and absence of an emitted project. Their tag allows focused checks:
@@ -65,6 +75,6 @@ bundle exec cucumber --publish-quiet features/realistic_examples.feature
 bundle exec cucumber --publish-quiet features/realistic_examples.feature --tags @unsupported_examples
 ```
 
-The suite is expected to pass while the four Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
+The suite is expected to pass while the five Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
 
 This corpus supplements the agreed roadmap; it does not reorder stages or complete them. The files remain self-contained while multiple-source compilation is planned, so the one-class-per-file lint rule is exempted only for this workload directory.

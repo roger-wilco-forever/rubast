@@ -19,6 +19,15 @@ Style/OneClassPerFile:
   Exclude:
     - "examples/workloads/*.rb"
 
+# Preserve the supplied registry example's explicit readers and array syntax.
+Style/TrivialAccessors:
+  Exclude:
+    - "examples/workloads/class_definitions.rb"
+
+Style/WordArray:
+  Exclude:
+    - "examples/workloads/class_definitions.rb"
+
 Naming/RescuedExceptionsVariableName:
   PreferredName: error
 

@@ -83,6 +83,17 @@ Feature: Track realistic programs and their current compiler blockers
       | sms     | sms:Ada   |
 
   @unsupported_examples
+  Scenario: Class definition registries need class methods and load-time state
+    Given I use the example "workloads/class_definitions.rb"
+    When I emit a Rust project
+    Then the diagnostic has code "E_UNSUPPORTED" at line 4
+    And no Rust project was created
+    And CRuby prints the reference output:
+      """
+      true
+      """
+
+  @unsupported_examples
   Scenario: Guarded unit pricing needs predicate narrowing
     Given I use the example "workloads/unit_pricing.rb"
     When I emit a Rust project

@@ -22,6 +22,8 @@ No calendar estimates are assigned yet. Reassess estimates after object state an
 
 The [realistic workload corpus](../examples/README.md) supplies application-shaped reference programs and observed blockers. Use shipping pricing for stage 7, streaming log summaries for stage 8, and cart aggregation for collection/block work. Notification selection and guarded unit pricing track object-join and predicate-narrowing limits outside the current contract. These examples supplement the stage sequence without declaring new support or reordering implementation.
 
+The [class-owned definition registry](../examples/workloads/class_definitions.rb), added on 2026-10-08, preserves a supplied Ruby program and its `true` reference output. Its first blocker is a class method; later requirements span arrays, symbols/hashes, class-body evaluation, class-instance state, inherited class-method lookup, `nil?`, and `p`. Track its class semantics in stage 14 and its `p` output in stage 16; collection support alone cannot complete the example. The supplied fixture does not exercise `Child.defs` or `clear`; add cases for class receiver identity and shared nested references before declaring full support.
+
 ## First milestone: a useful stateful class
 
 ```ruby
