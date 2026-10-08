@@ -4,7 +4,7 @@ Recorded on 2026-10-06. This is the agreed implementation order, not a claim tha
 
 ## Starting point
 
-The compiler supports `nil`, booleans, signed 64-bit integers, UTF-8 strings, locals, `gets`, safe string `chomp`, interpolation, `puts`, and user classes with constructors and scalar/object instance state. Instance methods support expression sequences, nested calls, scalar conditions, proven-safe arithmetic, and scalar/object returns. Arguments and fields can hold object handles; aliases, nested references, and cycles retain shared mutations. The runtime retains arena allocations until exit. Generated functions are shared when resolved nested lookup agrees and specialized when object-dependent targets differ. Empty classes, single inheritance from previously defined user classes, inherited constructors, overriding, and explicit/forwarded `super` are supported. Recursion, general dynamic dispatch, and joins of different object handles remain unsupported.
+The compiler supports `nil`, booleans, signed 64-bit integers, UTF-8 strings, locals, `gets`, safe string `chomp`, interpolation, `puts`, and user classes with constructors and scalar/object instance state. Instance methods support expression sequences, nested calls, scalar conditions, proven-safe arithmetic, and scalar/object returns. Arguments and fields can hold object handles; aliases, nested references, and cycles retain shared mutations. The runtime retains arena allocations until exit. Generated functions are shared when resolved nested lookup agrees and specialized when object-dependent targets differ. Empty classes, single inheritance from previously defined user classes, inherited constructors, overriding, and explicit/forwarded `super` are supported. `while`/`until`, pre/post-test modifiers, `break`, `next`, plain `begin`, and local/instance compound arithmetic assignment are supported with rechecked loop invariants and direct integer-literal guard bounds. Recursion, fresh user objects inside loops, general dynamic dispatch, and joins of different object handles remain unsupported.
 
 ## Completion rule
 
@@ -98,11 +98,13 @@ Support a single superclass, inherited method lookup, overriding, and `super`. D
 
 ## Language expansion
 
-### 8. Loops — planned
+### 8. Loops — complete (2026-10-08)
 
 Add `while`, `until`, `break`, and `next`. Preserve condition timing, truthiness, and control-expression values.
 
 **Acceptance:** counters, condition side effects, skipped iterations, and early exits match CRuby. Test execution has a timeout so regressions cannot hang the suite.
+
+**Delivered:** `while`/`until`, pre-test statement modifiers, post-test `begin` modifiers, plain expression grouping, `break` values, `next` with evaluated/discarded values, and local/instance compound arithmetic assignment. Rust emits labeled loops and body blocks so nested exits, post-test conditions after `next`, and method returns reach the correct context. Analysis computes loop invariants for locals and all tracked fields, compares object references without traversing cycles, widens integer intervals, and narrows direct local/instance reads compared with integer literals through `<`, `<=`, `>`, and `>=`. Post-test headers include the unguarded first iteration. The solver rejects after 16 passes; unsupported syntax and unreachable expressions remain checked. Ordinary conditional narrowing is unchanged. Fresh user-object allocations inside loops, changing object-handle joins, `redo`, `for`, and predicate `break`/`next` remain diagnostics. Input-dependent unbounded counters still fail with `E_INTEGER_RANGE`; the log-summary corpus now records that next blocker at line 7 rather than a syntax error at line 5. Acceptance execution kills the entire program process group after 30 seconds, with focused runner checks for stream capture and orphaned output pipes. [Loop scenarios](../features/loops.feature) and [the bounded counter](../examples/bounded_counter.rb) execute the declared contract against CRuby. `bin/verify` passed: RuboCop, 4 RSpec examples, 253 Cucumber scenarios (910 steps), Rust formatting, and Cargo tests (zero runtime unit assertions). The retained counter project also built and ran independently in release mode.
 
 ### 9. Arrays and mutable strings — planned
 
@@ -176,4 +178,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 8 with differential scenarios for `while`/`until`, condition timing, and scalar truthiness, then `break` and `next`. Define an analysis strategy for loop-carried locals and object fields and an integer range/overflow policy before accepting input-dependent counters. The log-summary workload also needs compound assignment; preserve the original program and record remaining blockers if that support is separate. Add an execution timeout before introducing loops into acceptance tests. Keep later milestones planned until implementation and executed checks establish their behavior.
+Begin stage 9 with array literals, indexed reads/writes, `length`, and `push`, then string concatenation and a small declared mutation API. Define shared storage, aliasing, cycles, frozen-string behavior, negative indexes, and error boundaries before expanding validation. Preserve evaluation order and class/object reference behavior. Array aggregation and Symbol-to-Proc conversion in the cart remain separate supported-call contracts for later work; do not claim the whole cart works after accepting its array literal.

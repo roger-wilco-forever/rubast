@@ -18,7 +18,27 @@ module Rubast
           when Prism::EmbeddedStatementsNode then normalize_embedded(node, source)
           when Prism::ParenthesesNode then normalize_sequence(node.body, node, source)
           when Prism::ReturnNode then normalize_return(node, source)
+          when Prism::WhileNode, Prism::UntilNode then normalize_loop(node, source)
+          when Prism::BreakNode, Prism::NextNode then normalize_loop_exit(node, source)
+          when Prism::BeginNode then normalize_begin(node, source)
           end
+        end
+
+        def normalize_loop(node, source)
+          IR::Loop.new(predicate: normalize(node.predicate, source),
+                       body: normalize_sequence(node.statements, node, source),
+                       until_loop: node.is_a?(Prism::UntilNode), post_test: node.begin_modifier?,
+                       result_type: nil, span: span(node, source))
+        end
+
+        def normalize_loop_exit(node, source)
+          value = normalize_return(node, source).value
+          IR::LoopExit.new(kind: node.is_a?(Prism::BreakNode) ? :break : :next, value: value, span: span(node, source))
+        end
+
+        def normalize_begin(node, source)
+          unsupported(node, source) if node.rescue_clause || node.else_clause || node.ensure_clause
+          normalize_sequence(node.statements, node, source)
         end
 
         def normalize_return(node, source)
@@ -73,7 +93,22 @@ module Rubast
             IR::LocalWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
           when Prism::LocalVariableReadNode
             IR::LocalRead.new(name: node.name, span: span(node, source))
+          when Prism::LocalVariableOperatorWriteNode, Prism::InstanceVariableOperatorWriteNode
+            normalize_operator_write(node, source)
           end
+        end
+
+        def normalize_operator_write(node, source)
+          instance = node.is_a?(Prism::InstanceVariableOperatorWriteNode)
+          receiver = if instance
+                       IR::InstanceRead.new(name: node.name, result_type: nil, span: span(node, source))
+                     else
+                       IR::LocalRead.new(name: node.name, span: span(node, source))
+                     end
+          value = IR::Call.new(name: node.binary_operator, receiver: receiver,
+                               arguments: [normalize(node.value, source)].freeze,
+                               safe_navigation: false, span: span(node, source))
+          (instance ? IR::InstanceWrite : IR::LocalWrite).new(name: node.name, value: value, span: span(node, source))
         end
 
         def normalize_embedded(node, source)
@@ -102,14 +137,16 @@ module Rubast
         when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
-             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode
+             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode,
+             Prism::LocalVariableOperatorWriteNode, Prism::InstanceVariableOperatorWriteNode
           normalize_variable(node, source)
         when Prism::InterpolatedStringNode
           IR::InterpolatedString.new(
             parts: node.parts.map { |part| normalize(part, source) }.freeze,
             span: span(node, source)
           )
-        when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode
+        when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode,
+             Prism::WhileNode, Prism::UntilNode, Prism::BreakNode, Prism::NextNode, Prism::BeginNode
           normalize_flow(node, source)
         when Prism::CallNode, Prism::SuperNode, Prism::ForwardingSuperNode then normalize_invocation(node, source)
         else unsupported(node, source)

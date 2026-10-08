@@ -24,7 +24,7 @@ Feature: Track realistic programs and their current compiler blockers
       """
 
   @unsupported_examples
-  Scenario: Log summaries need input loops and compound assignment
+  Scenario: Log summaries need a range policy for input-dependent counters
     Given I use the example "workloads/log_summary.rb"
     And standard input is:
       """
@@ -33,7 +33,7 @@ Feature: Track realistic programs and their current compiler blockers
       ok
       """
     When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 5
+    Then the diagnostic has code "E_INTEGER_RANGE" at line 7
     And no Rust project was created
     And CRuby prints the reference output:
       """
@@ -44,7 +44,7 @@ Feature: Track realistic programs and their current compiler blockers
   Scenario: Log summaries handle EOF without reading a line
     Given I use the example "workloads/log_summary.rb"
     When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 5
+    Then the diagnostic has code "E_INTEGER_RANGE" at line 7
     And no Rust project was created
     And CRuby prints the reference output:
       """

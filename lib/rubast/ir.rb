@@ -12,6 +12,8 @@ module Rubast
     Operation = Data.define(:name, :operands, :result_type, :span)
     Conditional = Data.define(:predicate, :consequent, :alternative, :result_type, :span)
     Return = Data.define(:value, :span)
+    Loop = Data.define(:predicate, :body, :until_loop, :post_test, :result_type, :span)
+    LoopExit = Data.define(:kind, :value, :span)
     NilLiteral = Data.define(:span)
     ConstantRead = Data.define(:name, :span)
     ObjectType = Data.define(:class_name, :fields)

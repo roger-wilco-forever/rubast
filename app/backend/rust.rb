@@ -76,6 +76,7 @@ module Rubast
           case node
           when IR::Puts, IR::Sequence then emit_body(node, lines)
           when IR::Conditional then emit_conditional(node, lines)
+          when IR::Loop, IR::LoopExit then emit_loop_flow(node, lines)
           when IR::Return then "{ return #{emit_expression(node.value, lines)}; }"
           when IR::Operation
             operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
@@ -104,8 +105,43 @@ module Rubast
         end
       end
 
+      module Loops
+        private
+
+        def emit_loop_flow(node, lines)
+          return emit_loop(node, lines) if node.is_a?(IR::Loop)
+
+          value = emit_expression(node.value, lines)
+          if node.kind == :break
+            "{ break '#{@loop_labels.first} #{value}; }"
+          else
+            "{ let _ = #{value}; break '#{@loop_labels.last}; }"
+          end
+        end
+
+        def emit_loop(node, lines)
+          previous = @loop_labels
+          @loop_labels = ["loop_#{@next_temp}", "iteration_#{@next_temp}"]
+          @next_temp += 1
+          predicate = []
+          condition = emit_expression(node.predicate, predicate)
+          test = "Runtime::truthy(&#{condition})"
+          test = "!#{test}" unless node.until_loop
+          predicate << "    if #{test} { break '#{@loop_labels.first} Value::Nil; }"
+          body = []
+          body << "    let _ = #{emit_expression(node.body, body)};"
+          iteration = "    '#{@loop_labels.last}: {\n#{body.join("\n")}\n    };"
+          parts = node.post_test ? [iteration, *predicate] : [*predicate, iteration]
+          expression = "'#{@loop_labels.first}: loop {\n#{parts.join("\n")}\n    }"
+          emit_value(expression, lines)
+        ensure
+          @loop_labels = previous
+        end
+      end
+
       class Emitter
         include ControlFlow
+        include Loops
 
         def initialize(functions)
           @functions = functions
@@ -152,7 +188,8 @@ module Rubast
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
           when IR::NewObject, IR::MethodCall then emit_object(node, lines)
-          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation then emit_flow(node, lines)
+          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit
+            emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
         end

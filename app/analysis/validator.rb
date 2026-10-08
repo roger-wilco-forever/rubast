@@ -194,6 +194,8 @@ module Rubast
           case node
           when IR::Sequence then validate_sequence(node, locals)
           when IR::Conditional then validate_conditional(node, locals)
+          when IR::Loop then validate_loop(node, locals)
+          when IR::LoopExit then validate_loop_exit(node, locals)
           when IR::Return
             unsupported(node) unless @return_exits
             value = validate_expression(node.value, locals)
@@ -206,16 +208,16 @@ module Rubast
         def validate_sequence(node, locals)
           result_type = :nil
           dead_state = nil
-          exit_count = nil
+          exit_counts = nil
           expressions = node.expressions.map do |expression|
             value = validate_expression(expression, locals)
             if dead_state
-              @return_exits&.slice!(exit_count..)
+              exit_counts.each { |list, count| list.slice!(count..) }
             else
               result_type = type_of(value, locals)
               if result_type == :never
                 dead_state = snapshot(locals)
-                exit_count = @return_exits&.length
+                exit_counts = loop_exit_lists.map { |list| [list, list.length] }
               end
             end
             value
@@ -299,12 +301,13 @@ module Rubast
         end
 
         def validate_method_body(method, parameters, receiver, origin = method, owner: receiver.class_name)
-          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context]
+          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
           @receiver_type = receiver
           @method_context = [owner, method]
+          @loop_context = nil
           @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           body = validate_expression(method.body, locals)
@@ -317,7 +320,7 @@ module Rubast
           merge_states(states, nil, origin)
           body.with(result_type: join_types(types, origin))
         ensure
-          @receiver_type, @active_methods, @return_exits, @method_context = saved_context
+          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context = saved_context
         end
 
         def validate_method_call(node, locals)
@@ -370,6 +373,7 @@ module Rubast
         include ControlFlow
         include Inheritance
         include InstanceState
+        include LoopAnalysis
 
         def call(program)
           @classes = {}
@@ -434,7 +438,7 @@ module Rubast
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral then validate_literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
-          when IR::Sequence, IR::Conditional, IR::Return then validate_flow(node, locals)
+          when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit then validate_flow(node, locals)
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
@@ -456,6 +460,7 @@ module Rubast
         end
 
         def validate_new(node, locals)
+          unsupported(node) if @loop_depth&.positive?
           name = node.receiver.name
           unsupported(node) unless @classes.key?(name) && node.name == :new && !node.safe_navigation
           type = object_type(name, :nil)
@@ -511,10 +516,12 @@ module Rubast
       def type_of(node, locals)
         case node
         when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral then literal_type(node)
+        when IR::LoopExit then :never
         when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
-        when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional
+        when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
+             IR::Loop
           node.result_type
         end
       end

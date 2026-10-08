@@ -28,7 +28,7 @@ When("I build and run the emitted project") do
   expect(status.success?).to be(true), "#{stdout}#{stderr}"
   executable = File.join(@output_path, "target/debug/rubast_program")
   @rubast_stdout, @rubast_stderr, @rubast_status =
-    Open3.capture3([executable, executable], stdin_data: @stdin_data.to_s)
+    capture_program([executable, executable], stdin_data: @stdin_data.to_s)
 end
 
 Then("no Rust project was created") do
@@ -80,11 +80,11 @@ end
 When("I run Rubast") do
   executable = File.expand_path("../../bin/rubast", __dir__)
   @rubast_stdout, @rubast_stderr, @rubast_status =
-    Open3.capture3(RbConfig.ruby, executable, "run", @source_path, stdin_data: @stdin_data.to_s)
+    capture_program(RbConfig.ruby, executable, "run", @source_path, stdin_data: @stdin_data.to_s)
 end
 
 Then("stdout, stderr, and exit status match CRuby") do
-  ruby_stdout, ruby_stderr, ruby_status = Open3.capture3(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
+  ruby_stdout, ruby_stderr, ruby_status = capture_program(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
   expect(@rubast_stdout).to eq(ruby_stdout)
   expect(@rubast_stderr).to eq(ruby_stderr)
   expect(@rubast_status.exitstatus).to eq(ruby_status.exitstatus)
@@ -137,7 +137,7 @@ Then("the emitted Rust defines {int} receiver functions") do |count|
 end
 
 Then("CRuby prints the reference output:") do |expected|
-  stdout, stderr, status = Open3.capture3(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
+  stdout, stderr, status = capture_program(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
   expect(status.exitstatus).to eq(0)
   expect(stderr).to eq("")
   expect(stdout).to eq("#{expected}\n")

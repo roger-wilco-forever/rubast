@@ -6,6 +6,7 @@ require "rbconfig"
 require "tmpdir"
 require "timeout"
 require "rspec/expectations"
+require_relative "program_execution"
 
 expected_ruby = File.read(File.expand_path("../../.ruby-version", __dir__)).strip
 unless RUBY_ENGINE == "ruby" && expected_ruby == RUBY_VERSION
@@ -13,6 +14,7 @@ unless RUBY_ENGINE == "ruby" && expected_ruby == RUBY_VERSION
 end
 
 World(RSpec::Matchers)
+World(RubastProgramExecution)
 
 Before do
   @workdir = Dir.mktmpdir("rubast-feature-")
