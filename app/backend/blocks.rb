@@ -8,24 +8,55 @@ module Rubast
       # ponytail: inline yielding calls; add a closure ABI when generated size makes duplication costly.
       def emit_block_invocation(node, lines)
         method = node.invocation
-        receiver = emit_value(emit_expression(method.receiver, lines), lines)
+        receiver = emit_value(emit_expression(method.receiver, lines), lines) unless method.is_a?(IR::NewObject)
         arguments = method.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+        receiver ||= emit_value("runtime.new_object()", lines)
         caller = location(node.span)
         saved = block_environment
-        @block_context = saved
-        @receiver = receiver
-        @return_label = "block_exit_#{node.exit_id}"
-        @loop_labels = nil
-        @retry_label = nil
-        @frame_name = "#{method.class_name}##{method.name}"
-        @block_depth = 0
+        enter_block_method(node, receiver, saved)
+        return emit_block_constructor(node, arguments, caller, lines) if method.is_a?(IR::NewObject)
+
         emit_inline_method(method, arguments, caller, lines)
       ensure
         restore_block_environment(saved) if saved
       end
 
+      def enter_block_method(node, receiver, saved)
+        method = node.invocation
+        @block_environments[node.block_id] ||= saved
+        @block_context = @block_environments.fetch(node.block_id)
+        @receiver = receiver
+        @return_label = "block_exit_#{node.exit_id}"
+        @loop_labels = nil
+        @retry_label = nil
+        @frame_name = "#{method.class_name}##{method.is_a?(IR::NewObject) ? :initialize : method.name}"
+        @block_depth = 0
+      end
+
+      def emit_argument_evaluation(node, lines)
+        arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+        saved = @locals
+        @locals = @locals.merge(node.names.zip(arguments).to_h)
+        emit_expression(node.body, lines)
+      ensure
+        @locals = saved if saved
+      end
+
+      def emit_block_constructor(node, arguments, caller, lines)
+        label = @return_label
+        with_target(label) do
+          statements = []
+          @return_label = "initializer_#{node.exit_id}"
+          emit_inline_method(node.invocation, arguments, caller, statements)
+          statements << "    #{@receiver}.clone()"
+          emit_value("'#{label}: {\n#{statements.join("\n")}\n    }", lines)
+        end
+      end
+
       def emit_inline_method(method, arguments, caller, lines)
-        traced_result([caller], lines) do |statements|
+        frames = [caller]
+        frames << location(method.span, "Class#new") if method.is_a?(IR::NewObject)
+        traced_result(frames, lines) do |statements|
           with_target(@return_label) do
             inline_locals(method.locals, method.parameters.zip(arguments).to_h, statements)
             body = []
@@ -39,7 +70,7 @@ module Rubast
         arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
         caller = location(node.span)
         saved = block_environment
-        restore_block_environment(@block_context)
+        restore_block_environment(@block_environments.fetch(node.block_id))
         @locals = @locals.dup
         @block_depth += 1
         traced_result([caller], lines) do |statements|

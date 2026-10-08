@@ -233,15 +233,14 @@ Feature: Yield to literal blocks in user instance methods
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Missing block
+  Scenario: A missing block raises the Ruby LocalJumpError
     Given the Ruby source is:
       """
       class Producer; def run; yield(1); end; end
       Producer.new.run
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Yield at top level
     Given the Ruby source is:
@@ -252,7 +251,7 @@ Feature: Yield to literal blocks in user instance methods
     Then the diagnostic has code "E_PARSE" at line 1
     And no Rust project was created
 
-  Scenario: A helper does not inherit its callers block
+  Scenario: A helper without its own block raises LocalJumpError
     Given the Ruby source is:
       """
       class Producer
@@ -261,9 +260,8 @@ Feature: Yield to literal blocks in user instance methods
       end
       Producer.new.run { 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Ignored invalid block
     Given the Ruby source is:
@@ -323,26 +321,24 @@ Feature: Yield to literal blocks in user instance methods
     Then the diagnostic has code "E_UNSUPPORTED" at line 2
     And no Rust project was created
 
-  Scenario: Blocks on new remain unsupported
+  Scenario: Constructor literal blocks execute with Ruby semantics
     Given the Ruby source is:
       """
       class Producer; def initialize; yield; end; end
       Producer.new { 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 2
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Implicit super does not silently drop a required block
+  Scenario: Implicit super forwards its supplied block
     Given the Ruby source is:
       """
       class Base; def run; yield; end; end
       class Child < Base; def run; super; end; end
       Child.new.run { 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Alternative yields merge captured locals and object state
     Given the Ruby source is:
@@ -553,7 +549,7 @@ Feature: Yield to literal blocks in user instance methods
     Then the diagnostic has code "E_UNSUPPORTED" at line 12
     And no Rust project was created
 
-  Scenario: Splats in yield remain unsupported
+  Scenario: Unused methods permit supported yield splats
     Given the Ruby source is:
       """
       class Producer
@@ -562,11 +558,10 @@ Feature: Yield to literal blocks in user instance methods
         end
       end
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Keyword yield arguments remain unsupported
+  Scenario: Unused methods permit supported yield keywords
     Given the Ruby source is:
       """
       class Producer
@@ -575,19 +570,17 @@ Feature: Yield to literal blocks in user instance methods
         end
       end
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Wrong method arity with a block is rejected
+  Scenario: Wrong method arity with a block raises ArgumentError
     Given the Ruby source is:
       """
       class Producer; def run(value); yield(value); end; end
       Producer.new.run { 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 2
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Non-fallthrough yielded bodies remain unsupported
     Given the Ruby source is:

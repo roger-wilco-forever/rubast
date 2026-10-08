@@ -319,11 +319,6 @@ Feature: Inherit instance methods while preserving Ruby lookup
       | class Base; end; class Child < Base.new; end                                                                           |
       | class Base; end; class Child < Base; end; class Child < Base; end                                                      |
       | class Base; end; class Child < Base; def value; super; end; end                                                        |
-      | class Base; def value(input); input; end; end; class Child < Base; def value; super(); end; end                        |
-      | class Base; def value; 1; end; end; class Child < Base; def value(input); super; end; end                             |
-      | class Base; end; class Child < Base; def initialize(input); super; end; end                                           |
-      | class Base; def value; 1; end; end; class Child < Base; def value; super { 1 }; end; end                              |
-      | class Base; def value(input); input; end; end; class Child < Base; def value(input); super(*input); end; end            |
       | class Base; def value; self.value; end; end; class Child < Base; end                                                    |
       | class Base; def value; helper; end; def helper; 1; end; end; class Child < Base; def helper; value; end; end; Child.new.value |
       | class Base; def initialize; end; end; class Child < Base; end; Child.new.initialize                                    |
@@ -343,3 +338,19 @@ Feature: Inherit instance methods while preserving Ruby lookup
     When I emit a Rust project
     Then the diagnostic has code "E_UNSUPPORTED" at line 5
     And no Rust project was created
+
+  Scenario Outline: Accepted extended argument fixtures preserve Ruby execution
+    Given the Ruby source is:
+      """
+      <source>
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+    Examples:
+      | source |
+      | class Base; def value(input); input; end; end; class Child < Base; def value; super(); end; end |
+      | class Base; def value; 1; end; end; class Child < Base; def value(input); super; end; end |
+      | class Base; end; class Child < Base; def initialize(input); super; end; end |
+      | class Base; def value; 1; end; end; class Child < Base; def value; super { 1 }; end; end |
+      | class Base; def value(input); input; end; end; class Child < Base; def value(input); super(*input); end; end |

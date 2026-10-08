@@ -215,8 +215,19 @@ Feature: Preserve constructor behavior and instance state
 
     Examples:
       | source                                                                                    |
-      | class Cell; def initialize(value); @value = value; end; end; Cell.new                     |
-      | class Cell; def initialize; end; end; Cell.new(42)                                        |
       | class Cell; def initialize; end; end; Cell.new.initialize                                 |
       | class Cell; def value; 42; end; end; puts @value                                          |
       | @value = 42                                                                               |
+
+  Scenario Outline: Accepted extended argument fixtures preserve Ruby execution
+    Given the Ruby source is:
+      """
+      <source>
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+    Examples:
+      | source |
+      | class Cell; def initialize(value); @value = value; end; end; Cell.new |
+      | class Cell; def initialize; end; end; Cell.new(42) |

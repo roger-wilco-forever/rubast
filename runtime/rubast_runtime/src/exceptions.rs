@@ -11,6 +11,7 @@ pub struct Location {
     pub line: usize,
     pub label: &'static str,
     pub highlight: &'static str,
+    pub name_highlight: &'static str,
 }
 
 impl PartialEq for Location {
@@ -27,10 +28,15 @@ impl Location {
             line,
             label,
             highlight: "",
+            name_highlight: "",
         }
     }
     pub fn highlight(mut self, highlight: &'static str) -> Self {
         self.highlight = highlight;
+        self
+    }
+    pub fn name_highlight(mut self, highlight: &'static str) -> Self {
+        self.name_highlight = highlight;
         self
     }
     fn render(&self) -> String {
@@ -152,6 +158,7 @@ impl Runtime {
                 "Exception" => None,
                 "StandardError" => Some("Exception"),
                 "FrozenError" => Some("RuntimeError"),
+                "NoMethodError" => Some("NameError"),
                 _ => Some("StandardError"),
             };
         }
@@ -177,6 +184,9 @@ impl Runtime {
             let mut message = error.message.clone().into_ruby_string();
             if matches!(error.class, "ArgumentError" | "TypeError") {
                 message.push_str(first.highlight);
+            }
+            if matches!(error.class, "NameError" | "NoMethodError") {
+                message.push_str(first.name_highlight);
             }
             if error.class == "RuntimeError" && message.is_empty() {
                 output.push_str(&format!("{}: unhandled exception\n", first.render()));

@@ -35,6 +35,7 @@ pub enum Value {
     String(Rc<RubyString>),
     Exception(ErrorRef),
     Object(usize),
+    Block(usize),
 }
 
 impl Value {
@@ -60,7 +61,9 @@ impl Value {
             Self::Symbol(name) => name.to_owned(),
             Self::String(text) => text.borrow().clone(),
             Self::Exception(error) => error.borrow().message.clone().into_ruby_string(),
-            Self::Object(_) => unreachable!("object string conversion is unsupported"),
+            Self::Object(_) | Self::Block(_) => {
+                unreachable!("object string conversion is unsupported")
+            }
         }
     }
 }
@@ -240,6 +243,28 @@ impl Runtime {
         Value::Object(id)
     }
 
+    pub fn copy_argument(&mut self, kind: &str, value: Value) -> Value {
+        if let Value::Object(id) = &value {
+            match (&self.objects[*id], kind) {
+                (Object::Array(values), "array") => return self.new_array(values.clone()),
+                (Object::Hash(values), "hash") => return self.new_hash(values.clone()),
+                _ => {}
+            }
+        }
+        if kind == "array" {
+            let values = if value == Value::Nil {
+                vec![]
+            } else {
+                vec![value]
+            };
+            return self.new_array(values);
+        }
+        if matches!(value, Value::Nil) {
+            return self.new_hash(Vec::new());
+        }
+        unreachable!("keyword splats require a validated hash");
+    }
+
     pub fn new_array(&mut self, values: Vec<Value>) -> Value {
         let id = self.objects.len();
         self.objects.push(Object::Array(values));
@@ -401,6 +426,7 @@ impl Runtime {
             | Value::Integer(_)
             | Value::Symbol(_)
             | Value::Object(_)
+            | Value::Block(_)
             | Value::Exception(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }

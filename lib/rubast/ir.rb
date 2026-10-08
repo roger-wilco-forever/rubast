@@ -4,7 +4,20 @@ module Rubast
   module IR
     Program = Data.define(:statements, :locals, :warnings)
     ClassDefinition = Data.define(:name, :superclass, :definitions, :span)
-    MethodDefinition = Data.define(:name, :parameters, :locals, :body, :span)
+    ArgumentSplat = Data.define(:kind, :value, :span)
+    Keywords = Data.define(:parts, :span)
+    ArgumentCopy = Data.define(:kind, :value, :result_type, :span)
+    ParameterArray = Data.define(:elements, :result_type, :span)
+    ParameterHash = Data.define(:elements, :result_type, :span)
+    Parameter = Data.define(:name, :kind, :default, :span)
+    MethodDefinition = Data.define(:name, :parameters, :signature, :locals, :body, :span) do
+      def initialize(name:, parameters:, locals:, body:, span:, signature: nil)
+        signature ||= parameters.map do |parameter|
+          Parameter.new(name: parameter, kind: :required, default: nil, span: span)
+        end.freeze
+        super
+      end
+    end
     Sequence = Data.define(:expressions, :result_type, :span)
     BooleanLiteral = Data.define(:value, :span)
     IntegerType = Data.define(:minimum, :maximum)
@@ -16,6 +29,7 @@ module Rubast
     Return = Data.define(:value, :span)
     Protected = Data.define(:body, :handlers, :otherwise, :ensure_body, :result_type, :span)
     Rescue = Data.define(:classes, :reference, :body, :span)
+    CallError = Data.define(:class_name, :message, :label, :result_type, :span)
     Raise = Data.define(:arguments, :result_type, :span)
     Retry = Data.define(:span)
     ExceptionType = Data.define(:class_name)
@@ -35,14 +49,22 @@ module Rubast
     MethodCall = Data.define(:class_name, :name, :receiver, :arguments, :parameters, :locals, :body, :result_type,
                              :span)
     Yield = Data.define(:arguments, :result_type, :span)
-    YieldInvoke = Data.define(:arguments, :parameters, :locals, :body, :result_type, :span)
-    BlockInvocation = Data.define(:exit_id, :invocation, :result_type, :span)
+    YieldInvoke = Data.define(:arguments, :parameters, :locals, :body, :result_type, :block_id, :span)
+    BlockInvocation = Data.define(:exit_id, :block_id, :invocation, :result_type, :span)
+    BlockType = Data.define(:id)
+    BlockValue = Data.define(:id, :span)
+    BlockPass = Data.define(:call, :value, :result_type, :span)
+    ArgumentEvaluation = Data.define(:arguments, :names, :body, :result_type, :span)
     Block = Data.define(:parameters, :locals, :body, :span)
     BlockCall = Data.define(:call, :block, :result_type, :span)
     Iterator = Data.define(:exit_id, :name, :family, :receiver, :parameters, :locals, :steps, :result_type, :span)
     BlockStep = Data.define(:index, :body, :span)
     Call = Data.define(:name, :receiver, :arguments, :safe_navigation, :span)
-    Super = Data.define(:arguments, :forward_arguments, :span)
+    Super = Data.define(:arguments, :forward_arguments, :block, :span) do
+      def initialize(arguments:, forward_arguments:, span:, block: nil)
+        super
+      end
+    end
     IntegerLiteral = Data.define(:value, :span)
     StringLiteral = Data.define(:value, :frozen, :span)
     SymbolLiteral = Data.define(:value, :span)

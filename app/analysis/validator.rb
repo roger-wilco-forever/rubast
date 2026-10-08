@@ -91,6 +91,7 @@ module Rubast
           case node
           when IR::Call then validate_call(node, locals)
           when IR::BlockCall then validate_block_call(node, locals)
+          when IR::BlockPass then validate_block_pass(node, locals)
           when IR::Yield then validate_yield(node, locals)
           else validate_super(node, locals)
           end
@@ -232,8 +233,12 @@ module Rubast
           when IR::LoopExit then validate_loop_exit(node, locals)
           when IR::Return then validate_return(node, locals)
           when IR::Protected then validate_protected(node, locals)
-          when IR::Retry then validate_retry(node, locals)
+          else validate_exception_exit(node, locals)
           end
+        end
+
+        def validate_exception_exit(node, locals)
+          node.is_a?(IR::Retry) ? validate_retry(node, locals) : validate_call_error(node, locals)
         end
 
         def validate_return(node, locals)
@@ -340,15 +345,52 @@ module Rubast
           owner, current = @method_context
           target = lookup_method(@superclasses[owner], current.name)
           unsupported(node) unless target || current.name == :initialize
-          arguments = if node.forward_arguments
-                        current.parameters.map { |name| IR::LocalRead.new(name: name, span: node.span) }.freeze
-                      else
-                        node.arguments
-                      end
+          arguments = node.forward_arguments ? forwarded_arguments(current, node.span) : node.arguments
           call = IR::Call.new(name: current.name, receiver: nil, arguments: arguments,
                               safe_navigation: false, span: node.span)
           receiver = IR::SelfRead.new(result_type: @receiver_type, span: node.span)
-          validate_object_call(call, receiver, @receiver_type, target || [:Object, nil], locals)
+          validate_super_invocation(node, call, receiver, target || [:BasicObject, default_initializer(call)], locals)
+        end
+      end
+
+      module MethodResults
+        private
+
+        def method_environment
+          [@receiver_type, @active_methods, @method_context, @loop_context,
+           @yield_context, @block_exit_context, @block_next_context, @retry_context, @constructor_type]
+        end
+
+        def restore_method_environment(values)
+          @receiver_type, @active_methods, @method_context, @loop_context,
+            @yield_context, @block_exit_context, @block_next_context, @retry_context, @constructor_type = values
+        end
+
+        def receiving_block_exits
+          return [] unless @yield_context && @yield_context[:receiving] != false
+
+          @yield_context.fetch(:exits)
+        end
+
+        def method_completion_type(type)
+          @constructor_type || type
+        end
+
+        def method_result(body, locals, origin)
+          exits = @return_context.fetch(:exits)
+          types = exits.map { |type, _| method_completion_type(type) }
+          states = exits.map(&:last)
+          block_exits = receiving_block_exits
+          types.concat(block_exits.map(&:first))
+          states.concat(block_exits.map(&:last))
+          unless body.result_type == :never
+            types << method_completion_type(body.result_type)
+            states << snapshot(locals)
+          end
+          merge_states(states, nil, origin)
+          result = join_types(types, origin)
+          unsupported(origin) if block_type?(result)
+          body.with(result_type: result)
         end
       end
 
@@ -366,6 +408,7 @@ module Rubast
           when IR::InstanceWrite
             unsupported(node) unless @receiver_type
             value = validate_expression(node.value, locals)
+            unsupported(node) if block_type?(type_of(value, locals))
             @receiver_type.fields[node.name] = type_of(value, locals)
             node.with(value: value)
           else validate_local(node, locals)
@@ -374,12 +417,12 @@ module Rubast
 
         def validate_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
-          saved_context = [@receiver_type, @active_methods, @method_context, @loop_context,
-                           @yield_context, @block_exit_context, @block_next_context, @retry_context]
+          saved_context = method_environment
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
           @yield_context = context[:block]
+          @constructor_type = context[:construction]
           @receiver_type = receiver
           @method_context = [owner, method]
           @loop_context = nil
@@ -388,39 +431,33 @@ module Rubast
           @retry_context = nil
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           with_return_context(locals) do
-            body = validate_expression(method.body, locals)
+            body = checked_entry_body(method, context, locals)
             method_result(body, locals, origin)
           end
         ensure
-          @receiver_type, @active_methods, @method_context, @loop_context,
-            @yield_context, @block_exit_context, @block_next_context, @retry_context = saved_context
-        end
-
-        def method_result(body, locals, origin)
-          exits = @return_context.fetch(:exits) + (@yield_context&.fetch(:exits) || [])
-          types = exits.map(&:first)
-          states = exits.map(&:last)
-          unless body.result_type == :never
-            types << body.result_type
-            states << snapshot(locals)
-          end
-          merge_states(states, nil, origin)
-          body.with(result_type: join_types(types, origin))
+          restore_method_environment(saved_context)
         end
 
         def validate_method_call(node, locals)
           receiver = validate_expression(node.receiver || IR::SelfRead.new(result_type: nil, span: node.span), locals)
           type = type_of(receiver, locals)
           return defer_call(node, receiver, locals) if type == :unknown
-          return validate_exception_call(node, receiver, type, locals) if type.is_a?(IR::ExceptionType)
-          return validate_collection_call(node, receiver, type, locals) if collection_call?(node, type)
-          return validate_operation(node, receiver, type, locals) unless type.is_a?(IR::ObjectType)
+          return dead_receiver_call(node, receiver, locals) if type == :never
+          return validate_special_receiver(node, receiver, type, locals) unless user_block_receiver?(type)
 
           unsupported(node) if node.name == :initialize
           target = lookup_method(type.class_name, node.name)
           return validate_identity(node, receiver, type, locals) unless target
 
           validate_object_call(node, receiver, type, target, locals)
+        end
+
+        def validate_special_receiver(node, receiver, type, locals)
+          return validate_block_receiver(node, receiver, type, locals) if block_receiver_call?(node, type)
+          return validate_exception_call(node, receiver, type, locals) if type.is_a?(IR::ExceptionType)
+          return validate_collection_call(node, receiver, type, locals) if collection_call?(node, type)
+
+          validate_operation(node, receiver, type, locals)
         end
 
         def validate_object_call(node, receiver, type, target, locals)
@@ -438,7 +475,7 @@ module Rubast
 
         def defer_call(node, receiver, locals)
           # Unknown receivers exist only while checking unused method syntax; actual calls resolve lookup.
-          arguments, = validate_arguments(node.arguments, (0...node.arguments.length).to_a, locals)
+          arguments = call_payload(node, locals).fetch(:arguments).freeze
           node.with(receiver: receiver, arguments: arguments)
         end
 
@@ -460,11 +497,15 @@ module Rubast
         include ControlFlow
         include Inheritance
         include InstanceState
+        include MethodResults
         include LoopAnalysis
         include Collections
         include Hashes
         include Iterators
         include Blocks
+        include BlockArguments
+        include CallArguments
+        include Arguments
         include Exceptions
 
         def call(program)
@@ -475,6 +516,7 @@ module Rubast
           @captured_scopes = []
           @block_exit_contexts = []
           @next_block_exit = 0
+          @literal_blocks = {}
           @ensure_contexts = []
           locals = program.locals.to_h { |name| [name, :nil] }
           @exception_context = exception_context(locals)
@@ -497,7 +539,7 @@ module Rubast
             unsupported(node)
           end
 
-          IR::Puts.new(value: validate_scalar(node.arguments.first, locals), span: node.span)
+          IR::Puts.new(value: validate_output(node.arguments.first, locals), span: node.span)
         end
 
         def validate_scalar(node, locals)
@@ -508,17 +550,18 @@ module Rubast
 
         def validate_expression(node, locals)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
             validate_literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
-          when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit, IR::Protected, IR::Retry
+          when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit, IR::Protected, IR::Retry, IR::CallError
             validate_flow(node, locals)
           when IR::InterpolatedString
-            parts = node.parts.map { |part| validate_scalar(part, locals) }
+            parts = node.parts.map { |part| validate_output(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
-          when IR::Call, IR::Super, IR::BlockCall, IR::Yield then validate_dispatch(node, locals)
-          when IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
+          when IR::Call, IR::Super, IR::BlockCall, IR::BlockPass, IR::Yield then validate_dispatch(node, locals)
+          when IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash, IR::IndexWrite
+            validate_collection_expression(node, locals)
           else unsupported(node)
           end
         end
@@ -547,7 +590,7 @@ module Rubast
           type = object_type(name, :nil)
           owner, method = lookup_method(name, :initialize)
           invocation = validate_invocation(node, method, locals, type, owner: owner)
-          IR::NewObject.new(class_name: owner || name, **invocation,
+          IR::NewObject.new(class_name: owner || :BasicObject, **invocation,
                             result_type: continuing_type(invocation.fetch(:body), locals, type), span: node.span)
         end
 
@@ -562,23 +605,22 @@ module Rubast
       private
 
       def validate_invocation(node, method, locals, receiver, owner:)
-        names = method&.parameters || []
-        unsupported(node) unless node.arguments.length == names.length
-        arguments, parameters = validate_arguments(node.arguments, names, locals)
-        body = if method
-                 validate_method_body(method, parameters, receiver, node, owner: owner)
-               else
-                 IR::Sequence.new(expressions: [].freeze, result_type: :nil, span: node.span)
-               end
+        method ||= default_initializer(node)
+        arguments, parameters, bindings = prepare_arguments(node, method, locals, owner: owner || :BasicObject)
+        return deferred_invocation(method, receiver, owner, [arguments, parameters], node) unless bindings
+
+        body = validate_method_body(method, parameters, receiver, node,
+                                    owner: owner || :BasicObject, bindings: bindings)
         body = body.with(result_type: :never) if parameters.value?(:never)
-        { arguments: arguments, parameters: names, locals: method&.locals || [], body: body }
+        { arguments: arguments, parameters: parameters.keys.freeze,
+          locals: (method.locals + parameters.keys).uniq.freeze, body: body }
       end
 
       def validate_literal(node)
         case node
         when IR::IntegerLiteral then validate_integer(node)
         when IR::StringLiteral, IR::SymbolLiteral then validate_string(node)
-        when IR::NilLiteral, IR::BooleanLiteral then node
+        when IR::NilLiteral, IR::BooleanLiteral, IR::BlockValue then node
         end
       end
 
@@ -598,13 +640,16 @@ module Rubast
         case node
         when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral, IR::SymbolLiteral
           literal_type(node)
+        when IR::BlockValue then IR::BlockType.new(id: node.id)
         when IR::LoopExit, IR::BlockExit, IR::Retry then :never
         when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
              IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator,
-             IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise, IR::ExceptionValue
+             IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise,
+             IR::ExceptionValue, IR::CallError, IR::ArgumentCopy, IR::ParameterArray, IR::ParameterHash,
+             IR::ArgumentEvaluation, IR::BlockPass
           node.result_type
         end
       end
@@ -623,16 +668,6 @@ module Rubast
 
       def string_like?(node, locals)
         members(type_of(node, locals)).all? { |type| %i[string frozen_string nil unknown never].include?(type) }
-      end
-
-      def validate_arguments(nodes, names, locals)
-        types = {}
-        arguments = nodes.zip(names).map do |node, name|
-          value = validate_expression(node, locals)
-          types[name] = type_of(value, locals)
-          value
-        end
-        [arguments.freeze, types]
       end
 
       def validate_integer(node)

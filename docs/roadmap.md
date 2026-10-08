@@ -152,11 +152,17 @@ Retry restarts its own protected body, with same-begin ensure delayed until comp
 
 `bin/verify` passed: RuboCop (56 files), 4 RSpec examples, 582 Cucumber scenarios (2,025 steps), Rust formatting, and Cargo tests (zero runtime unit assertions). The updated retained release project also matched CRuby stdout, stderr, and exit status.
 
-### 13. Extended method arguments — planned
+### 13. Extended method arguments — complete (2026-10-08)
 
-Add defaults, optional positional arguments, `*args`, required and optional keywords, `**kwargs`, and `&block`, in that order. Evaluate defaults at call time in method scope.
+Required/optional positional parameters, named rest arguments, required/optional keywords, named keyword rest, and named block parameters are supported. Defaults run at call time in callee scope only when omitted; explicit nil is supplied. Required trailing parameters bind from the end. Caller expressions run once in order before binding/defaults. Array/hash splats snapshot slots before later mutations, duplicate keywords retain the last value and their Ruby effects, and rest containers have independent storage with shared elements. Positional hashes remain distinct from keywords; empty keyword splats and `**nil` contribute no argument.
 
-**Acceptance:** omitted arguments differ correctly from explicit `nil`; positional hashes differ from keywords; default side effects occur only when needed; invalid arity and argument kinds have Ruby-compatible errors.
+Named blocks retain their literal origin and support call, local aliases/truthiness/nil comparison, and forwarding through user instance methods, constructors, and bare/explicit super. Block-call receiver expressions run before their arguments. Yield and block calls accept supported splats/keywords with the existing zero/one literal-block parameter contract. Captured state, lexical self, next results, original receiving-call break targets, nonlocal returns, and ensure preserve Ruby boundaries. Ordinary initializer returns produce the constructed object; supplied-block breaks can override that result.
+
+Invalid arity, missing/unknown keywords, and supported statically known invalid keyword/block conversions raise Ruby-compatible errors before defaults or the body. Missing yield raises LocalJumpError; an omitted block call raises NoMethodError and follows NameError/StandardError rescue lookup. Backtraces, source snippets, stderr, and exit status compare with pinned CRuby. Function reuse includes call shape and error source locations, preserving repeated default-constructor failures at different call sites. Existing accepted fixtures keep their exact Ruby source and now execute against CRuby.
+
+**Boundary:** active splats need exact array lengths and a single known hash key order. Named blocks cannot escape as return values, fields, collection elements, output, or ordinary arguments. Anonymous parameters/forwarding, `...`, `**nil` parameters, destructuring, custom conversions, Symbol-to-Proc, broader Proc APIs, extended literal-block parameters, and forwarding into built-in iterators remain diagnostics. Explicit fresh allocations and implicit rest packs keep the existing allocation, shape, integer, and bounded-analysis ceilings. The original cart and registry remain unchanged: Array#sum/Symbol-to-Proc and stage 14 class behavior still need their own contracts.
+
+[Argument scenarios](../features/method_arguments.feature) and [boundary scenarios](../features/method_argument_boundaries.feature) cover these rules. [Configurable quotes](../examples/configurable_quotes.rb) combine constructor customization, defaults, rest charges, keywords, callback forwarding, and rejected calls. Its retained `target/configurable-quotes-stage13` project built independently in release mode and matched stdout, stderr, and exit status. `bin/verify` passed: RuboCop (61 files), 4 RSpec examples, 676 Cucumber scenarios (2,316 steps), Rust formatting, and Cargo tests (zero runtime unit assertions).
 
 ### 14. Modules and the broader class model — planned
 
@@ -200,4 +206,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 13 with optional positional arguments and call-time defaults in method scope. Preserve the distinction between omitted arguments and explicit nil, default side-effect order, and required-argument boundaries before adding rest arguments, keywords, keyword rest, and block parameters in the stated order. Use stage 12's runtime errors for the declared invalid-call contract. Keep the original cart and class-registry blockers visible; Array#sum, Symbol-to-Proc, and broader class behavior still need their own acceptance contracts.
+Begin stage 14 by defining class/module objects and constant lookup for nested constants. Then implement module, include, extend, class methods, visibility, and attribute helpers in the stated order. Use the unchanged supplied class registry as an execution target for class-body evaluation, per-class instance-variable state, inherited class-method receivers, and superclass lookup. Add its remaining blockers (array concatenation/equality, nil?, p) under their own execution contracts. Keep Array#sum and Symbol-to-Proc as explicit independent cart blockers.

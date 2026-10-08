@@ -61,8 +61,13 @@ module Rubast
         unsupported(origin) if types.grep(IR::HashShape).uniq.length > MAX_SHAPES
       end
 
+      def explicit_loop_hash?(node)
+        @loop_depth&.positive? && !node.is_a?(IR::ParameterHash)
+      end
+
       def validate_hash(node, locals)
-        unsupported(node) if @loop_depth&.positive? || node.elements.length > Collections::MAX_ARRAY_LENGTH * 2
+        unsupported(node) if explicit_loop_hash?(node)
+        unsupported(node) if node.elements.length > Collections::MAX_ARRAY_LENGTH * 2
         names = (0...node.elements.length).to_a
         elements, types = validate_arguments(node.elements, names, locals)
         keys = (0...elements.length).step(2).map do |index|

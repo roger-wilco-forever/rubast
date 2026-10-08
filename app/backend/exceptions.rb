@@ -8,7 +8,8 @@ module Rubast
 
         def location(span, label = frame_label)
           "Location::new(#{Rust.rust_string(span.path)}, #{span.line}, #{Rust.rust_string(label)})" \
-            ".highlight(#{Rust.rust_string(span.highlight)})"
+            ".highlight(#{Rust.rust_string(span.highlight)})" \
+            ".name_highlight(#{Rust.rust_string(span.name_highlight)})"
         end
 
         def frame_label
@@ -75,6 +76,10 @@ module Rubast
         when IR::ExceptionValue
           message = emit_expression(node.message, lines)
           emit_value("Runtime::exception(#{Rust.rust_string(node.class_name.to_s)}, #{message})", lines)
+        when IR::CallError
+          value = "Runtime::exception(#{Rust.rust_string(node.class_name.to_s)}, " \
+                  "Value::from(#{Rust.rust_string(node.message)}.to_owned()))"
+          emit_value("runtime.raise(Some(#{value}), #{location(node.span, node.label || frame_label)})?", lines)
         when IR::Raise
           value = node.arguments.empty? ? "None" : "Some(#{emit_expression(node.arguments.first, lines)})"
           emit_value("runtime.raise(#{value}, #{location(node.span)})?", lines)

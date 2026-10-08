@@ -22,7 +22,8 @@ module Rubast
       end
 
       def self.function(node, functions)
-        key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name, dispatches(node.body)]
+        key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name,
+               node.parameters, dispatches(node.body)]
         return functions.fetch(key).first if functions.key?(key)
 
         name = "method_#{functions.length}"
@@ -45,11 +46,16 @@ module Rubast
         when IR::MethodCall then [[node.class_name, node.name, nested]]
         when IR::NewObject then [[node.class_name, :initialize, nested]]
         when IR::Builtin then [[node.family, node.name, nested]]
-        when IR::BlockInvocation then [[node.invocation.class_name, node.invocation.name,
+        when IR::CallError then [[node.class_name, node.message, node.label, node.span]]
+        when IR::BlockInvocation then [[node.invocation.class_name, invocation_name(node.invocation),
                                         block_signature(node.invocation.body)]]
         when IR::Iterator then [[node.family, node.name, node.steps.length, nested]]
         else nested
         end
+      end
+
+      def self.invocation_name(node)
+        node.is_a?(IR::NewObject) ? :initialize : node.name
       end
 
       def self.block_signature(node)
@@ -73,6 +79,7 @@ module Rubast
           text = "#{rust_string(node.value)}.to_owned()"
           node.frozen ? "Value::frozen(#{text}, #{rust_string(node.value.inspect)})" : "Value::from(#{text})"
         when IR::SymbolLiteral then "Value::Symbol(#{rust_string(node.value)})"
+        when IR::BlockValue then "Value::Block(#{node.id})"
         end
       end
 
@@ -181,19 +188,29 @@ module Rubast
         private
 
         def emit_allocation_or_call(node, lines)
+          return emit_argument_copy(node, lines) if node.is_a?(IR::ArgumentCopy)
           return emit_iterator(node, lines) if node.is_a?(IR::Iterator)
           return emit_block_invocation(node, lines) if node.is_a?(IR::BlockInvocation)
           return emit_yield(node, lines) if node.is_a?(IR::YieldInvoke)
 
-          if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral) || node.is_a?(IR::Builtin)
+          if collection_node?(node) || node.is_a?(IR::Builtin)
             emit_collection(node, lines)
           else
             emit_object(node, lines)
           end
         end
 
+        def collection_node?(node)
+          [IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash].any? { |type| node.is_a?(type) }
+        end
+
+        def emit_argument_copy(node, lines)
+          value = emit_expression(node.value, lines)
+          emit_value("runtime.copy_argument(#{Rust.rust_string(node.kind.to_s)}, #{value})", lines)
+        end
+
         def emit_collection(node, lines)
-          return emit_container(node, lines) if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral)
+          return emit_container(node, lines) if collection_node?(node)
 
           receiver = emit_value(emit_expression(node.receiver, lines), lines)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
@@ -210,7 +227,7 @@ module Rubast
 
         def emit_container(node, lines)
           elements = node.elements.map { |element| emit_value(emit_expression(element, lines), lines) }
-          hash = node.is_a?(IR::HashLiteral)
+          hash = node.is_a?(IR::HashLiteral) || node.is_a?(IR::ParameterHash)
           target = hash ? "new_hash" : "new_array"
           elements = elements.each_slice(2).map { |key, value| "(#{key}, #{value})" } if hash
           emit_value("runtime.#{target}(vec![#{elements.join(', ')}])", lines)
@@ -238,6 +255,10 @@ module Rubast
           node.is_a?(IR::NewObject) && node.body.is_a?(IR::Sequence) && node.body.expressions.empty?
         end
 
+        def emit_assembled_value(node, lines)
+          node.is_a?(IR::ArgumentEvaluation) ? emit_argument_evaluation(node, lines) : emit_interpolation(node, lines)
+        end
+
         def emit_interpolation(node, lines)
           parts = node.parts.map { |part| emit_expression(part, lines) }
           "Runtime::interpolate(vec![#{parts.join(', ')}])"
@@ -261,6 +282,7 @@ module Rubast
           @targets = {}
           @frame_name = "<main>"
           @block_depth = 0
+          @block_environments = {}
         end
 
         def call(program)
@@ -299,18 +321,18 @@ module Rubast
 
         def emit_expression(node, lines)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
             Rust.literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
-          when IR::InterpolatedString then emit_interpolation(node, lines)
-          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin, IR::Iterator,
-               IR::BlockInvocation, IR::YieldInvoke
+          when IR::InterpolatedString, IR::ArgumentEvaluation then emit_assembled_value(node, lines)
+          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash,
+               IR::Builtin, IR::Iterator, IR::BlockInvocation, IR::YieldInvoke, IR::ArgumentCopy
             emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit, IR::BlockExit,
-               IR::BlockBody, IR::Protected, IR::Raise, IR::Retry, IR::ExceptionValue
+               IR::BlockBody, IR::Protected, IR::Raise, IR::Retry, IR::ExceptionValue, IR::CallError
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end

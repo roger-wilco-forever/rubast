@@ -21,25 +21,35 @@ module Rubast
       end
 
       def normalize_yield(node, source)
-        IR::Yield.new(arguments: (node.arguments&.arguments || []).map { |arg| normalize(arg, source) }.freeze,
+        IR::Yield.new(arguments: (node.arguments&.arguments || []).map do |arg|
+          normalize_call_argument(arg, source)
+        end.freeze,
                       result_type: nil, span: span(node, source))
       end
 
       def normalize_block_call(node, source)
-        block = node.block
+        if node.block.is_a?(Prism::BlockArgumentNode)
+          unsupported(node.block, source) unless node.block.expression
+          return IR::BlockPass.new(call: normalize_plain_call(node, source),
+                                   value: normalize(node.block.expression, source),
+                                   result_type: nil, span: span(node, source))
+        end
+        IR::BlockCall.new(call: normalize_plain_call(node, source), block: normalize_literal_block(node.block, source),
+                          result_type: nil, span: span(node, source))
+      end
+
+      def normalize_literal_block(block, source)
         unsupported(block, source) unless block.is_a?(Prism::BlockNode)
         parameters = block.parameters
         unsupported(parameters, source) if parameters && !parameters.is_a?(Prism::BlockParametersNode)
         required = normalize_parameters(parameters&.parameters, source)
         unsupported(block, source) if required.length > 1
-        invocation = normalize_plain_call(node, source)
-        value = in_scope(block.locals, block: true) do |locals|
+        in_scope(block.locals, block: true) do |locals|
           IR::Block.new(parameters: required.map do |parameter|
             @scopes.last.fetch(:names).fetch(parameter.name)
           end.freeze,
                         locals: locals, body: normalize_block_body(block, source), span: span(block, source))
         end
-        IR::BlockCall.new(call: invocation, block: value, result_type: nil, span: span(node, source))
       end
 
       def normalize_block_body(node, source)

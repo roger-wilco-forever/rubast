@@ -163,7 +163,7 @@ module Rubast
           IR::Call.new(
             name: node.name,
             receiver: node.receiver && normalize(node.receiver, source),
-            arguments: (node.arguments&.arguments || []).map { |arg| normalize(arg, source) }.freeze,
+            arguments: (node.arguments&.arguments || []).map { |arg| normalize_call_argument(arg, source) }.freeze,
             safe_navigation: node.call_operator_loc&.slice == "&.",
             span: span(node, source)
           )
@@ -187,15 +187,24 @@ module Rubast
           node.is_a?(Prism::CallNode) ? normalize_call(node, source) : normalize_super(node, source)
         end
 
+        def normalize_super_block(block, source)
+          return nil unless block
+          return normalize_literal_block(block, source) unless block.is_a?(Prism::BlockArgumentNode)
+
+          unsupported(block, source) unless block.expression
+          normalize(block.expression, source)
+        end
+
         def normalize_super(node, source)
-          unsupported(node.block, source) if node.block
           forward = node.is_a?(Prism::ForwardingSuperNode)
           arguments = forward ? [] : (node.arguments&.arguments || [])
-          IR::Super.new(arguments: arguments.map { |argument| normalize(argument, source) }.freeze,
-                        forward_arguments: forward, span: span(node, source))
+          IR::Super.new(arguments: arguments.map { |argument| normalize_call_argument(argument, source) }.freeze,
+                        forward_arguments: forward, block: normalize_super_block(node.block, source),
+                        span: span(node, source))
         end
       end
 
+      include Arguments
       include Exceptions
       include BlockScopes
       include Expressions
@@ -249,10 +258,10 @@ module Rubast
 
       def normalize_method(node, source)
         unsupported(node, source) unless node.is_a?(Prism::DefNode) && node.receiver.nil?
-        requireds = normalize_parameters(node.parameters, source)
-        IR::MethodDefinition.new(name: node.name, parameters: requireds.map(&:name).freeze,
-                                 locals: node.locals.freeze, body: normalize_method_body(node, source),
-                                 span: span(node, source))
+        signature = in_scope(node.locals) { normalize_method_parameters(node.parameters, source) }
+        IR::MethodDefinition.new(name: node.name, parameters: signature.map(&:name).freeze,
+                                 signature: signature, locals: node.locals.freeze,
+                                 body: normalize_method_body(node, source), span: span(node, source))
       end
 
       def normalize_method_body(node, source)
@@ -281,16 +290,17 @@ module Rubast
         )
       end
 
-      def argument_highlight(node)
+      def source_highlight(node, kind)
         return "" unless node.is_a?(Prism::CallNode)
 
-        spot = ErrorHighlight.spot(node, point_type: :args)
+        spot = ErrorHighlight.spot(node, point_type: kind)
         spot ? ErrorHighlight.formatter.message_for(spot) : ""
       end
 
       def span(node, source)
         Span.new(path: source.path, line: node.location.start_line,
-                 column: node.location.start_column + 1, highlight: argument_highlight(node))
+                 column: node.location.start_column + 1, highlight: source_highlight(node, :args),
+                 name_highlight: source_highlight(node, :name))
       end
     end
   end

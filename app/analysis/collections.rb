@@ -13,7 +13,8 @@ module Rubast
         private
 
         def validate_array(node, locals)
-          unsupported(node) if @loop_depth&.positive? || node.elements.length > MAX_ARRAY_LENGTH
+          unsupported(node) if !node.is_a?(IR::ParameterArray) && @loop_depth&.positive?
+          unsupported(node) if node.elements.length > MAX_ARRAY_LENGTH
           names = (0...node.elements.length).to_a
           elements, types = validate_arguments(node.elements, names, locals)
           array = object_type(:Array, :nil)
@@ -104,8 +105,8 @@ module Rubast
 
       def validate_collection_expression(node, locals)
         case node
-        when IR::ArrayLiteral then validate_array(node, locals)
-        when IR::HashLiteral then validate_hash(node, locals)
+        when IR::ArrayLiteral, IR::ParameterArray then validate_array(node, locals)
+        when IR::HashLiteral, IR::ParameterHash then validate_hash(node, locals)
         else validate_index_write(node, locals)
         end
       end

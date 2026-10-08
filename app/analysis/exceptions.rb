@@ -6,7 +6,8 @@ module Rubast
       PARENTS = { Exception: nil, StandardError: :Exception, RuntimeError: :StandardError,
                   ArgumentError: :StandardError, TypeError: :StandardError, IndexError: :StandardError,
                   ZeroDivisionError: :StandardError, FrozenError: :RuntimeError, RangeError: :StandardError,
-                  IOError: :StandardError }.freeze
+                  IOError: :StandardError, NameError: :StandardError, NoMethodError: :NameError,
+                  LocalJumpError: :StandardError }.freeze
 
       module Raising
         private

@@ -116,17 +116,50 @@ module Rubast
         private
 
         def validate_yield(node, locals)
-          arguments, types = validate_arguments(node.arguments, (0...node.arguments.length).to_a, locals)
-          unless @yield_context
-            unsupported(node) unless @checking_unused && @method_context
-            return node.with(arguments: arguments, result_type: :unknown)
-          end
-          context = @yield_context
+          return deferred_yield(node, locals) if !@yield_context && @checking_unused
+
+          validate_block_execution(node, @yield_context, locals)
+        end
+
+        def deferred_yield(node, locals)
+          pack = call_payload(node, locals)
+          node.with(arguments: pack[:arguments].freeze, result_type: :unknown)
+        end
+
+        def validate_block_execution(node, context, locals)
+          pack = call_payload(node, locals)
+          unsupported(node) if pack[:unknown]
+          scope = locals.merge(pack[:types])
+          arguments = pack[:positional].dup
+          arguments << parameter_hash(pack[:keywords], node.span) unless pack[:keywords].empty?
+          values, types = validate_arguments(arguments, (0...arguments.length).to_a, scope)
+          body = if context
+                   resolved_yield(node, context, values, types, scope)
+                 else
+                   missing_block_error(node, locals, :LocalJumpError, "no block given (yield)")
+                 end
+          evaluated_arguments(node, pack, body, locals, scope)
+        end
+
+        def evaluated_arguments(node, pack, body, locals, scope)
+          result = continuing_type(pack[:arguments], locals, type_of(body, scope))
+          IR::ArgumentEvaluation.new(arguments: pack[:arguments].freeze, names: pack[:types].keys.freeze,
+                                     body: body, result_type: result, span: node.span)
+        end
+
+        def resolved_yield(node, context, arguments, types, locals)
           context[:used] = true
+          @literal_blocks.fetch(context.fetch(:id))[:used] = true
           body = yielding_body(context, types.fetch(0, :nil))
           IR::YieldInvoke.new(arguments: arguments, parameters: context.fetch(:block).parameters,
-                              locals: context.fetch(:block).locals, body: body,
+                              locals: context.fetch(:block).locals, body: body, block_id: context.fetch(:id),
                               result_type: continuing_type(arguments, locals, body.result_type), span: node.span)
+        end
+
+        def missing_block_error(node, locals, name, message)
+          error = IR::CallError.new(class_name: name, message: message, label: nil, result_type: :never,
+                                    span: node.span)
+          validate_call_error(error, locals)
         end
 
         def yielding_body(context, type)
@@ -155,7 +188,9 @@ module Rubast
 
       def validate_block_call(node, locals)
         call = node.call
-        unsupported(node) if call.safe_navigation || call.receiver.is_a?(IR::ConstantRead)
+        unsupported(node) if call.safe_navigation
+        return validate_constructor_block(node, locals) if call.receiver.is_a?(IR::ConstantRead)
+
         receiver = validate_expression(call.receiver || IR::SelfRead.new(result_type: nil, span: node.span), locals)
         type = type_of(receiver, locals)
         return defer_block_call(node, receiver, locals) if type == :unknown
@@ -180,35 +215,53 @@ module Rubast
       end
 
       def validate_user_block(node, receiver, type, target, locals)
-        method = target.last
-        unsupported(node) unless node.call.arguments.length == method.parameters.length
-        arguments, parameters = validate_arguments(node.call.arguments, method.parameters, locals)
-        context = new_block_context(node.block, locals)
-        context[:lexical] = [@receiver_type, @method_context, @yield_context, @return_context, @retry_context]
+        prepared = prepare_arguments(node.call, target.last, locals, owner: target.first)
+        return defer_block_call(node, receiver, locals) unless prepared.last
+
+        context = new_literal_context(node.block, locals)
         @captured_scopes << locals
         context[:capture_depth] = @captured_scopes.length
-        body = user_block_body(node, type, target, parameters, context)
-        invocation = resolved_block_method(node, receiver, target, arguments, body)
-        IR::BlockInvocation.new(exit_id: context.fetch(:id), invocation: invocation,
-                                result_type: body.result_type, span: node.span)
+        build_block_invocation(node, receiver, [type, target], prepared, context)
       ensure
         @captured_scopes.pop if context
       end
 
-      def user_block_body(node, type, target, parameters, context)
+      def new_literal_context(block, locals)
+        context = new_block_context(block, locals)
+        context[:lexical] = [@receiver_type, @method_context, @yield_context, @return_context, @retry_context]
+        @literal_blocks[context.fetch(:id)] = context
+        context
+      end
+
+      def build_block_invocation(node, receiver, resolution, prepared, context)
+        type, target = resolution
+        body = user_block_body(node, type, target, prepared, context)
+        invocation = resolved_block_method(node, receiver, target, prepared, body)
+        @next_block_exit += 1
+        exit_id = context[:receiving] == false ? @next_block_exit : context.fetch(:id)
+        IR::BlockInvocation.new(exit_id: exit_id, block_id: context.fetch(:id), invocation: invocation,
+                                result_type: body.result_type, span: node.span)
+      end
+
+      def user_block_body(node, type, target, prepared, context)
         owner, method = target
+        _, parameters, bindings = prepared
         body = with_block_exit_context(context) do
-          result = validate_method_body(method, parameters, type, node, owner: owner, block: context)
+          result = validate_method_body(method, parameters, type, node,
+                                        owner: owner, block: context, bindings: bindings,
+                                        construction: context[:construction])
           check_ignored_block(context) unless context[:used]
           result
         end
         parameters.value?(:never) ? body.with(result_type: :never) : body
       end
 
-      def resolved_block_method(node, receiver, target, arguments, body)
+      def resolved_block_method(node, receiver, target, prepared, body)
         owner, method = target
+        arguments, parameters, = prepared
+        names = parameters.keys.freeze
         IR::MethodCall.new(class_name: owner, name: method.name, receiver: receiver, arguments: arguments,
-                           parameters: method.parameters, locals: method.locals, body: body,
+                           parameters: names, locals: (method.locals + names).uniq.freeze, body: body,
                            result_type: body.result_type, span: node.span)
       end
     end
