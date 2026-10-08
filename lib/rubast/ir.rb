@@ -3,15 +3,28 @@
 module Rubast
   module IR
     Program = Data.define(:statements, :locals, :warnings)
-    ClassDefinition = Data.define(:name, :superclass, :definitions, :span)
+    ClassDefinition = Data.define(:name, :superclass, :definitions, :span, :kind, :locals) do
+      def initialize(name:, superclass:, definitions:, span:, kind: :class, locals: [])
+        super
+      end
+    end
+    MethodOwner = Data.define(:key, :index)
+    SingletonClass = Data.define(:name)
+    SingletonBody = Data.define(:definitions, :span)
+    ConstantPath = Data.define(:parts, :absolute, :span)
+    ConstantWrite = Data.define(:target, :value, :span)
+    ConstantGet = Data.define(:name, :result_type, :span)
+    ConstantSet = Data.define(:name, :value, :result_type, :span)
+    ClassValue = Data.define(:result_type, :span)
+    NamespaceBody = Data.define(:name, :kind, :receiver, :locals, :body, :result_type, :span)
     ArgumentSplat = Data.define(:kind, :value, :span)
     Keywords = Data.define(:parts, :span)
     ArgumentCopy = Data.define(:kind, :value, :result_type, :span)
     ParameterArray = Data.define(:elements, :result_type, :span)
     ParameterHash = Data.define(:elements, :result_type, :span)
     Parameter = Data.define(:name, :kind, :default, :span)
-    MethodDefinition = Data.define(:name, :parameters, :signature, :locals, :body, :span) do
-      def initialize(name:, parameters:, locals:, body:, span:, signature: nil)
+    MethodDefinition = Data.define(:name, :parameters, :signature, :locals, :body, :span, :singleton, :native) do
+      def initialize(name:, parameters:, locals:, body:, span:, signature: nil, singleton: false, native: false)
         signature ||= parameters.map do |parameter|
           Parameter.new(name: parameter, kind: :required, default: nil, span: span)
         end.freeze
@@ -42,7 +55,11 @@ module Rubast
     ConstantRead = Data.define(:name, :span)
     ObjectType = Data.define(:class_name, :fields)
     # class_name is the resolved initializer owner; result_type retains the allocated class.
-    NewObject = Data.define(:class_name, :arguments, :parameters, :locals, :body, :result_type, :span)
+    NewObject = Data.define(:class_name, :arguments, :parameters, :locals, :body, :result_type, :span, :receiver) do
+      def initialize(class_name:, arguments:, parameters:, locals:, body:, result_type:, span:, receiver: nil)
+        super
+      end
+    end
     SelfRead = Data.define(:result_type, :span)
     InstanceRead = Data.define(:name, :result_type, :span)
     InstanceWrite = Data.define(:name, :value, :span)
@@ -70,6 +87,7 @@ module Rubast
     SymbolLiteral = Data.define(:value, :span)
     HashLiteral = Data.define(:elements, :result_type, :span)
     ArrayLiteral = Data.define(:elements, :result_type, :span)
+    Setter = Data.define(:call, :result_type, :span)
     IndexWrite = Data.define(:receiver, :index, :value, :result_type, :span)
     Builtin = Data.define(:family, :name, :receiver, :arguments, :result_type, :span)
     InterpolatedString = Data.define(:parts, :span)
@@ -77,6 +95,8 @@ module Rubast
     LocalRead = Data.define(:name, :span)
     GetLine = Data.define(:span)
     SafeChomp = Data.define(:receiver, :span)
+    NilCheck = Data.define(:receiver, :known, :result_type, :span)
+    Print = Data.define(:value, :result_type, :span)
     Puts = Data.define(:value, :span)
   end
 end

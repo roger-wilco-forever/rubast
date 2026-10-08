@@ -5,7 +5,7 @@ module Rubast
     module Collections
       # ponytail: track up to 10,000 slots; use an element summary if larger workloads need it.
       MAX_ARRAY_LENGTH = 10_000
-      ARRAY_OPERATIONS = %i[length [] []= push << !].freeze
+      ARRAY_OPERATIONS = %i[length [] []= push << ! + == !=].freeze
       STRING_READS = %i[+ length bytesize dup chomp].freeze
       STRING_WRITES = %i[<< concat replace clear chomp!].freeze
 
@@ -35,8 +35,10 @@ module Rubast
         end
 
         def array_result(node, array, types)
-          return array.fields.fetch(:length) if node.name == :length
-          return :boolean if node.name == :!
+          return array_metadata_type(node, array) if %i[length !].include?(node.name)
+          return array_concat_type(array, types.fetch(0), node) if node.name == :+
+
+          return array_equal_type(array, types.fetch(0), node) if %i[== !=].include?(node.name)
           return unknown_array_result(node, array, types) if array.fields[:length] == :unknown
 
           length = array_length(array, node)

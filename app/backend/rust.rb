@@ -100,15 +100,20 @@ module Rubast
 
         def emit_flow(node, lines)
           case node
-          when IR::Puts, IR::Sequence then emit_body(node, lines)
+          when IR::Puts, IR::Print, IR::Sequence then emit_body(node, lines)
           when IR::Conditional then emit_conditional(node, lines)
           when IR::Loop, IR::LoopExit, IR::BlockExit, IR::BlockBody then emit_loop_flow(node, lines)
           when IR::Return then emit_return(node, lines)
-          else node.is_a?(IR::Operation) ? emit_operation(node, lines) : emit_exception(node, lines)
+          when IR::Operation, IR::NilCheck then emit_operation(node, lines)
+          else emit_exception(node, lines)
           end
         end
 
         def emit_operation(node, lines)
+          if node.is_a?(IR::NilCheck)
+            value = emit_value(emit_expression(node.receiver, lines), lines)
+            return emit_value("Value::Bool(matches!(#{value}, Value::Nil))", lines)
+          end
           operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
           name = Rust.rust_string(node.name.to_s)
           function = operands.one? ? "unary" : "binary"
@@ -237,18 +242,44 @@ module Rubast
       module Objects
         private
 
-        def emit_object(node, lines)
-          receiver = emit_value(emit_expression(node.receiver, lines), lines) if node.is_a?(IR::MethodCall)
+        def emit_object(node, lines, assignment: false)
+          receiver = emit_object_receiver(node, lines)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+          return emit_native_argument_error(node, lines) if native_argument_error?(node)
+
           receiver ||= emit_value("runtime.new_object()", lines)
           return "#{receiver}.clone()" if empty_constructor?(node)
 
+          result = emit_object_dispatch(node, receiver, arguments, lines, assignment: assignment)
+          return arguments.last if assignment
+
+          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
+        end
+
+        def emit_object_receiver(node, lines)
+          value = emit_value(emit_expression(node.receiver, lines), lines) if node.receiver
+          value if node.is_a?(IR::MethodCall)
+        end
+
+        def emit_object_dispatch(node, receiver, arguments, lines, assignment:)
           function = Rust.function(node, @functions)
+          arguments = arguments.map { |value| "#{value}.clone()" } if assignment
           inputs = ["runtime", "#{receiver}.clone()", *arguments]
           frames = [location(node.span)]
           frames << location(node.span, "Class#new") if node.is_a?(IR::NewObject)
-          result = traced_result(frames, lines) { "#{function}(#{inputs.join(', ')})?" }
-          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
+          traced_result(frames, lines) { "#{function}(#{inputs.join(', ')})?" }
+        end
+
+        def emit_native_argument_error(node, lines)
+          return emit_expression(node.body.with(label: nil), lines) unless node.is_a?(IR::NewObject)
+
+          traced_result([location(node.span)], lines) do |parts|
+            emit_expression(node.body.with(label: "Class#new"), parts)
+          end
+        end
+
+        def native_argument_error?(node)
+          node.body.is_a?(IR::CallError) && node.body.label == :caller
         end
 
         def empty_constructor?(node)
@@ -273,6 +304,7 @@ module Rubast
         include Blocks
         include Exceptions
         include Objects
+        include Namespaces
 
         def initialize(functions)
           @functions = functions
@@ -297,7 +329,7 @@ module Rubast
         def method(node, name)
           parameters = node.parameters.each_with_index.to_h { |parameter, index| [parameter, "arg_#{index}"] }
           @receiver = "receiver"
-          @frame_name = "#{node.class_name}##{node.is_a?(IR::NewObject) ? :initialize : node.name}"
+          @frame_name = method_label(node)
           @targets["return"] = [0, :return]
           signature = ["runtime: &mut Runtime", "receiver: Value", *parameters.values.map { |arg| "#{arg}: Value" }]
           lines = ["fn #{name}(#{signature.join(', ')}) -> Outcome {"]
@@ -323,7 +355,8 @@ module Rubast
           case node
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
             Rust.literal(node)
-          when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
+          when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead,
+               IR::Setter, IR::ConstantGet, IR::ConstantSet, IR::ClassValue, IR::NamespaceBody
             emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
@@ -331,7 +364,8 @@ module Rubast
           when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash,
                IR::Builtin, IR::Iterator, IR::BlockInvocation, IR::YieldInvoke, IR::ArgumentCopy
             emit_allocation_or_call(node, lines)
-          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit, IR::BlockExit,
+          when IR::Puts, IR::Print, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::NilCheck,
+               IR::Loop, IR::LoopExit, IR::BlockExit,
                IR::BlockBody, IR::Protected, IR::Raise, IR::Retry, IR::ExceptionValue, IR::CallError
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
@@ -347,7 +381,8 @@ module Rubast
             value = emit_expression(node.value, lines)
             emit_value("runtime.set_ivar(&#{@receiver}, #{Rust.rust_string(node.name.to_s)}, #{value})", lines)
           when IR::LocalWrite then emit_local_write(node, lines)
-          else emit_value("#{@locals.fetch(node.name)}.clone()", lines)
+          when IR::LocalRead then emit_value("#{@locals.fetch(node.name)}.clone()", lines)
+          else emit_namespace(node, lines)
           end
         end
 
@@ -359,7 +394,11 @@ module Rubast
         end
 
         def emit_body(node, lines)
-          if node.is_a?(IR::Puts)
+          if node.is_a?(IR::Print)
+            value = emit_value(emit_expression(node.value, lines), lines)
+            lines << "    runtime.print_scalar(#{value}.clone());"
+            value
+          elsif node.is_a?(IR::Puts)
             lines << "    runtime.puts(#{emit_expression(node.value, lines)});"
             "Value::Nil"
           else

@@ -6,9 +6,9 @@ The small examples at the root demonstrate supported constructs: [interactive in
 
 ## Realistic workload corpus
 
-The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All seven run successfully on CRuby with the documented inputs; four currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All eight run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after completion of stage 13 on 2026-10-08:
+Observed after completion of stage 14 on 2026-10-09:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
@@ -18,11 +18,12 @@ Observed after completion of stage 13 on 2026-10-08:
 | [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 25 | Symbol-to-Proc (`&:subtotal`) | Array storage/append now work; Literal each/map/times blocks and symbol literals now work; `Array#sum` still needs an aggregation contract; Symbol-to-Proc conversion needs its own block conversion/lifetime contract; named literal block forwarding is supported |
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |
 | [unit_pricing.rb](workloads/unit_pricing.rb) | Divide a subtotal by quantity and return a message for an invalid quantity | Matches CRuby | None on the supplied fixture | Possible zero division is a checked runtime error; nonzero results still require the existing `i64` proof |
-| [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | `E_UNSUPPORTED`, line 4 | Singleton `DefNode` (`def self.defs`) | Class methods and class-body execution/state (stage 14), array concatenation/equality (array/hash storage, indexing, and symbol literals now work), `nil?`, and `p` (stage 16); each needs its own contract |
+| [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | Matches CRuby | None on the unchanged supplied fixture | Additional acceptance cases cover inherited class receivers, fallback, clear/add, and nested collection aliases |
+| [modular_quote.rb](workloads/modular_quote.rb) | Nested shop namespaces, tax helpers, prepended loyalty discount, accessors, inherited class factory, and callback | Matches CRuby | None on the supplied fixture | Static namespace composition only; dynamic modifications and multiple source loading remain outside the subset |
 
 The first diagnostic can hide subsequent blockers. For example, accepting array syntax would not make Symbol-to-Proc aggregation work automatically. The notification example exercises object-result joins even though its syntax already normalizes successfully. Keep these programs intact when implementing support; do not remove useful constructs merely to turn a row green.
 
-The registry preserves the supplied Ruby source. `@defs` is an instance variable of each class object, not a shared `@@` variable. `Child.defs` explicitly falls back to `Base.defs`; inherited class methods must retain the actual class receiver. The supplied fixture only calls `Base.defs` and prints `true`. Subclass fallback, `add`, `clear`, and retained array aliases need additional execution cases before claiming the full registry contract.
+The registry preserves the supplied Ruby source. `@defs` is an instance variable of each class object, not a shared `@@` variable. `Child.defs` explicitly falls back to `Base.defs`; inherited class methods must retain the actual class receiver. The supplied fixture only calls `Base.defs` and prints `true`. [Additional registry scenarios](../features/class_registry.feature) now execute subclass fallback, add/clear with independent child state, and retained nested aliases. The supplied source remains unchanged.
 
 ## Run and inspect
 
@@ -63,7 +64,19 @@ The remaining examples need no input. Shopping-cart output is `total:4900 cents`
 ruby examples/workloads/class_definitions.rb
 # true
 bundle exec ruby bin/rubast run examples/workloads/class_definitions.rb
-# E_UNSUPPORTED at line 4; exit status 2
+# true
+```
+
+Modular quotes combine the stage 14 features in one application fixture:
+
+```sh
+bundle exec ruby bin/rubast run examples/workloads/modular_quote.rb
+# Ada: 1270
+# 1220
+# 550
+bundle exec ruby bin/rubast emit-rust examples/workloads/modular_quote.rb -o target/modular-quote-stage14
+cargo build --release --manifest-path target/modular-quote-stage14/Cargo.toml
+target/modular-quote-stage14/target/release/rubast_program
 ```
 
 ## Track progress
@@ -75,6 +88,6 @@ bundle exec cucumber --publish-quiet features/realistic_examples.feature
 bundle exec cucumber --publish-quiet features/realistic_examples.feature --tags @unsupported_examples
 ```
 
-The suite is expected to pass while four Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
+The suite is expected to pass while three Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
 
 This corpus supplements the agreed roadmap; it does not reorder stages or complete them. The files remain self-contained while multiple-source compilation is planned, so the one-class-per-file lint rule is exempted only for this workload directory.

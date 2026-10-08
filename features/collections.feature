@@ -315,7 +315,6 @@ Feature: Share array storage and mutable UTF-8 strings
       | values = [1]; values[0, 1]                                                                         |
       | values = []; puts values                                                                          |
       | values = []; puts "#{values}"                                                                    |
-      | values = [1]; puts values == [1]                                                                   |
       | values = [1]; values[0] += 1                                                                       |
       | class Cell; end; values = [Cell.new, Cell.new]; index = if gets; 0; else; 1; end; values[index]       |
       | values = []; while gets; values.push(1); end                                                       |
@@ -377,6 +376,14 @@ Feature: Share array storage and mutable UTF-8 strings
     Given the Ruby source is:
       """
       values = []; values[-1] = 1
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Accepted array equality fixture preserves Ruby execution
+    Given the Ruby source is:
+      """
+      values = [1]; puts values == [1]
       """
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby

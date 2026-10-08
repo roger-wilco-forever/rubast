@@ -60,8 +60,8 @@ module Rubast
       module Constructors
         private
 
-        def validate_constructor_block(node, locals)
-          type, target = constructor_block_target(node)
+        def validate_constructor_block(node, locals, receiver)
+          type, target = constructor_block_target(node, type_of(receiver, locals))
           prepared = prepare_arguments(node.call, target.last, locals, owner: target.first)
           unsupported(node) unless prepared.last
           context = new_literal_context(node.block, locals)
@@ -69,23 +69,35 @@ module Rubast
           @captured_scopes << locals
           context[:capture_depth] = @captured_scopes.length
           result = build_block_invocation(node, nil, [type, target], prepared, context)
-          result.with(invocation: constructor_invocation(result.invocation, result.result_type))
+          result.with(invocation: constructor_invocation(result.invocation, result.result_type, receiver))
         ensure
           @captured_scopes.pop if context
         end
 
-        def constructor_block_target(node)
+        def validate_constructor_pass(node, receiver, type, locals)
+          resolution = constructor_block_target(node, type)
+          result = validate_passed_block(node, nil, resolution, locals)
+          case result
+          when IR::BlockInvocation then result.with(invocation: result.invocation.with(receiver: receiver))
+          when IR::NewObject then result.with(receiver: receiver)
+          else IR::Sequence.new(expressions: [receiver, result].freeze,
+                                result_type: result.result_type, span: node.span)
+          end
+        end
+
+        def constructor_block_target(node, class_type)
           call = node.call
-          name = call.receiver.name
+          check_method_visibility(call, class_type, nil)
+          name = class_type.class_name.name
           unsupported(node) if @loop_depth&.positive?
-          unsupported(node) unless call.name == :new && @classes.key?(name)
+          unsupported(node) unless call.name == :new && @namespace_kinds[name] == :class
           type = object_type(name, :nil)
           owner, method = lookup_method(name, :initialize)
           [type, [owner || :BasicObject, method || default_initializer(call)]]
         end
 
-        def constructor_invocation(method, type)
-          IR::NewObject.new(**method.to_h.except(:name, :receiver), result_type: type)
+        def constructor_invocation(method, type, receiver = nil)
+          IR::NewObject.new(**method.to_h.except(:name, :receiver), result_type: type, receiver: receiver)
         end
       end
 
@@ -99,17 +111,14 @@ module Rubast
       def validate_block_pass(node, locals)
         call = node.call
         unsupported(node) if call.safe_navigation
-        if call.receiver.is_a?(IR::ConstantRead)
-          type, target = constructor_block_target(node)
-          receiver = nil
-        else
-          receiver = validate_expression(call.receiver || IR::SelfRead.new(result_type: nil, span: call.span), locals)
-          type = type_of(receiver, locals)
-          return defer_block_pass(node, receiver, locals) if type == :unknown
+        receiver = validate_expression(call.receiver || IR::SelfRead.new(result_type: nil, span: call.span), locals)
+        type = type_of(receiver, locals)
+        return defer_block_pass(node, receiver, locals) if type == :unknown
 
-          target = block_method_target(call, type)
-        end
-        validate_passed_block(node, receiver, [type, target], locals)
+        target = user_block_receiver?(type) && lookup_method(type.class_name, call.name)
+        return validate_constructor_pass(node, receiver, type, locals) if constructor_call?(call, type, target)
+
+        validate_passed_block(node, receiver, [type, block_method_target(call, type)], locals)
       end
 
       def validate_passed_block(node, receiver, resolution, locals)
@@ -133,6 +142,7 @@ module Rubast
         unsupported(call) unless user_block_receiver?(type) && call.name != :initialize
         target = lookup_method(type.class_name, call.name)
         unsupported(call) unless target
+        check_method_visibility(call, type, target)
         target
       end
 

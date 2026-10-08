@@ -18,7 +18,7 @@ module Rubast
         accepts = signature.any? { |item| %i[keyword keyword_rest].include?(item.kind) }
         inputs << parameter_hash(keywords, node.span) unless accepts || keywords.empty?
         error = arity_error(signature, inputs.length) || (keyword_error(signature, keywords) if accepts)
-        return [argument_error(error, method, owner)] if error
+        return [argument_error(error, method, owner, node)] if error
 
         bind_positionals(signature, inputs) + (accepts ? bind_keywords(signature, keywords) : [])
       end
@@ -142,10 +142,10 @@ module Rubast
             locals: (method.locals + parameters.keys).uniq.freeze, body: body }
         end
 
-        def argument_error(message, method, owner)
+        def argument_error(message, method, owner, origin)
           label = owner == :BasicObject ? "BasicObject#initialize" : method.name.to_s
-          IR::CallError.new(class_name: :ArgumentError, message: message, label: label,
-                            result_type: :never, span: method.span)
+          IR::CallError.new(class_name: :ArgumentError, message: message, label: method.native ? :caller : label,
+                            result_type: :never, span: method.native ? origin.span : method.span)
         end
 
         def validate_call_error(node, locals)

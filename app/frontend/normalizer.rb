@@ -153,7 +153,10 @@ module Rubast
         private
 
         def normalize_call(node, source)
-          unsupported(node, source) if node.attribute_write?
+          if node.attribute_write?
+            unsupported(node, source) if node.block || node.call_operator_loc&.slice == "&."
+            return IR::Setter.new(call: normalize_plain_call(node, source), result_type: nil, span: span(node, source))
+          end
           return normalize_block_call(node, source) if node.block
 
           normalize_plain_call(node, source)
@@ -204,6 +207,7 @@ module Rubast
         end
       end
 
+      include Namespaces
       include Arguments
       include Exceptions
       include BlockScopes
@@ -223,7 +227,9 @@ module Rubast
 
       def normalize(node, source)
         case node
-        when Prism::ClassNode then normalize_class(node, source)
+        when Prism::ClassNode, Prism::ModuleNode, Prism::DefNode, Prism::SingletonClassNode,
+             Prism::ConstantPathNode, Prism::ConstantWriteNode, Prism::ConstantPathWriteNode
+          normalize_namespace(node, source)
         when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode,
              Prism::ArrayNode, Prism::HashNode, Prism::SymbolNode
           normalize_literal(node, source)
@@ -247,20 +253,23 @@ module Rubast
       end
 
       def normalize_class(node, source)
-        unsupported(node, source) unless node.constant_path.is_a?(Prism::ConstantReadNode)
-        unsupported(node.superclass, source) if node.superclass && !node.superclass.is_a?(Prism::ConstantReadNode)
-        methods = node.body&.body || []
-
-        IR::ClassDefinition.new(name: node.name, superclass: node.superclass && normalize(node.superclass, source),
-                                definitions: methods.map { |method| normalize_method(method, source) }.freeze,
-                                span: span(node, source))
+        kind = node.is_a?(Prism::ModuleNode) ? :module : :class
+        superclass = kind == :class && node.superclass
+        IR::ClassDefinition.new(name: normalize(node.constant_path, source),
+                                superclass: superclass ? normalize(superclass, source) : nil,
+                                definitions: in_scope(node.locals) do
+                                  (node.body&.body || []).map { |part| normalize(part, source) }.freeze
+                                end,
+                                kind: kind, locals: node.locals.freeze, span: span(node, source))
       end
 
       def normalize_method(node, source)
-        unsupported(node, source) unless node.is_a?(Prism::DefNode) && node.receiver.nil?
+        unless node.is_a?(Prism::DefNode) && (node.receiver.nil? || node.receiver.is_a?(Prism::SelfNode))
+          unsupported(node, source)
+        end
         signature = in_scope(node.locals) { normalize_method_parameters(node.parameters, source) }
         IR::MethodDefinition.new(name: node.name, parameters: signature.map(&:name).freeze,
-                                 signature: signature, locals: node.locals.freeze,
+                                 signature: signature, singleton: !node.receiver.nil?, locals: node.locals.freeze,
                                  body: normalize_method_body(node, source), span: span(node, source))
       end
 

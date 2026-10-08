@@ -41,14 +41,15 @@ Feature: Save an independently buildable Rust project
     When I build and run the emitted project
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Reject unsupported input without creating a project
+  Scenario: Emit and run an empty module
     Given the Ruby source is:
       """
       module Unsupported; end
       """
     When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    Then the emitted project contains its source and runtime
+    When I build and run the emitted project
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Preserve existing destination files
     Given I use the example "greeter.rb"

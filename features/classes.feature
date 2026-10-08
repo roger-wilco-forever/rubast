@@ -93,7 +93,6 @@ Feature: Stateless user classes
       | source                                                                         |
       | class Child < Object; def name; "child"; end; end                              |
       | class Stateful; def initialize; "init"; end; end; Stateful.new.initialize      |
-      | class Singleton; def self.value; 42; end; end                                  |
       | class Duplicate; def value; 1; end; def value; 2; end; end                     |
       | class Reopened; def value; 1; end; end; class Reopened; def other; 2; end; end |
       | class String; def value; 1; end; end                                           |
@@ -117,3 +116,11 @@ Feature: Stateless user classes
       | class Keyword; def value(input:); input; end; end |
       | class Greeter; def greet(name); name; end; end; puts Greeter.new.greet |
       | class Greeter; def greet(name); name; end; end; puts Greeter.new("Ada") |
+
+  Scenario: Accepted singleton method declaration fixture preserves Ruby execution
+    Given the Ruby source is:
+      """
+      class Singleton; def self.value; 42; end; end
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

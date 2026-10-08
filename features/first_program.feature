@@ -20,13 +20,13 @@ Feature: First Ruby-to-Rust compilation slice
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Report an unsupported construct
+  Scenario: Execute an empty module definition
     Given the Ruby source is:
       """
       module Greeter; end
       """
     When I run Rubast
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Preserve statement order and 64-bit integer boundaries
     Given the Ruby source is:

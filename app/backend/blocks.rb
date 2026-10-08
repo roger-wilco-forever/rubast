@@ -8,8 +8,11 @@ module Rubast
       # ponytail: inline yielding calls; add a closure ABI when generated size makes duplication costly.
       def emit_block_invocation(node, lines)
         method = node.invocation
-        receiver = emit_value(emit_expression(method.receiver, lines), lines) unless method.is_a?(IR::NewObject)
+        value = emit_value(emit_expression(method.receiver, lines), lines) if method.receiver
+        receiver = value unless method.is_a?(IR::NewObject)
         arguments = method.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+        return emit_native_argument_error(method, lines) if native_argument_error?(method)
+
         receiver ||= emit_value("runtime.new_object()", lines)
         caller = location(node.span)
         saved = block_environment
@@ -29,7 +32,7 @@ module Rubast
         @return_label = "block_exit_#{node.exit_id}"
         @loop_labels = nil
         @retry_label = nil
-        @frame_name = "#{method.class_name}##{method.is_a?(IR::NewObject) ? :initialize : method.name}"
+        @frame_name = method_label(method)
         @block_depth = 0
       end
 

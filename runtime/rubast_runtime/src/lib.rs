@@ -86,6 +86,7 @@ enum Object {
 pub struct Runtime {
     // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
     objects: Vec<Object>,
+    constants: HashMap<&'static str, Value>,
     frames: Vec<Location>,
     exceptions: Vec<ErrorRef>,
 }
@@ -94,6 +95,7 @@ impl Runtime {
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
+            constants: HashMap::new(),
             frames: Vec::new(),
             exceptions: Vec::new(),
         }
@@ -237,6 +239,15 @@ impl Runtime {
         Ok(Self::string_operation(name, receiver, arguments))
     }
 
+    pub fn constant(&self, name: &'static str) -> Value {
+        self.constants[name].clone()
+    }
+
+    pub fn set_constant(&mut self, name: &'static str, value: Value) -> Value {
+        self.constants.insert(name, value.clone());
+        value
+    }
+
     pub fn new_object(&mut self) -> Value {
         let id = self.objects.len();
         self.objects.push(Object::Instance(HashMap::new()));
@@ -280,6 +291,23 @@ impl Runtime {
         let Value::Object(id) = receiver else {
             unreachable!("array operations require a proven array receiver");
         };
+        if name == "+" {
+            let Value::Object(other) = arguments[0] else {
+                unreachable!()
+            };
+            let Object::Array(left) = &self.objects[id] else {
+                unreachable!()
+            };
+            let Object::Array(right) = &self.objects[other] else {
+                unreachable!()
+            };
+            let values = left.iter().chain(right).cloned().collect();
+            return self.new_array(values);
+        }
+        if matches!(name, "==" | "!=") {
+            let equal = self.array_equal(&Value::Object(id), &arguments[0]);
+            return Value::Bool(if name == "==" { equal } else { !equal });
+        }
         let Object::Array(values) = &mut self.objects[id] else {
             unreachable!("array operations require array storage");
         };
@@ -316,6 +344,18 @@ impl Runtime {
             }
             _ => unreachable!("unknown array operation"),
         }
+    }
+
+    fn array_equal(&self, left: &Value, right: &Value) -> bool {
+        if let (Value::Object(first), Value::Object(second)) = (left, right) {
+            if let (Object::Array(left), Object::Array(right)) =
+                (&self.objects[*first], &self.objects[*second])
+            {
+                return left.len() == right.len()
+                    && left.iter().zip(right).all(|(a, b)| self.array_equal(a, b));
+            }
+        }
+        left == right
     }
 
     pub fn new_hash(&mut self, pairs: Vec<(Value, Value)>) -> Value {
@@ -505,6 +545,14 @@ impl Runtime {
                 }
             }
             _ => unreachable!("unknown string operation"),
+        }
+    }
+
+    pub fn print_scalar(&mut self, value: Value) {
+        if matches!(value, Value::Nil) {
+            self.puts(Value::from("nil".to_owned()));
+        } else {
+            self.puts(value);
         }
     }
 

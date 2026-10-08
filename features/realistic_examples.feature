@@ -82,12 +82,10 @@ Feature: Track realistic programs and their current compiler blockers
       | email   | email:Ada |
       | sms     | sms:Ada   |
 
-  @unsupported_examples
-  Scenario: Class definition registries need class methods and load-time state
+  Scenario: Class definition registries execute class methods and load-time state
     Given I use the example "workloads/class_definitions.rb"
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 4
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
     And CRuby prints the reference output:
       """
       true

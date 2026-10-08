@@ -246,13 +246,20 @@ Feature: Call methods on the current instance
       | class Bad; def initialize; end; def value; initialize; end; end                                            |
       | class Bad; def initialize; end; def value; self.initialize; end; end                                       |
       | class Bad; def value; 42; end; end; puts self.value                                                        |
-      | class Bad; def value=(input); 42; end; def change; "#{self.value = "Ada"}"; end; end; puts Bad.new.change  |
       | class Bad; def []=(index, input); 42; end; def change; "#{self[0] = "Ada"}"; end; end; puts Bad.new.change |
 
   Scenario: Wrong arity in an unused method has no execution effects
     Given the Ruby source is:
       """
       class Bad; def value; self.helper; end; def helper(input); input; end; end
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Accepted setter fixture preserves Ruby execution
+    Given the Ruby source is:
+      """
+      class Bad; def value=(input); 42; end; def change; "#{self.value = "Ada"}"; end; end; puts Bad.new.change
       """
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby

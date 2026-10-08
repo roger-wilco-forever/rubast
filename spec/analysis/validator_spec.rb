@@ -14,8 +14,11 @@ RSpec.describe Rubast::Analysis::Validator do
     )
     definition = Rubast::IR::ClassDefinition.new(name: :Example, superclass: nil, definitions: [method], span: span)
     program = Rubast::IR::Program.new(statements: [definition], locals: [], warnings: [])
-    expect(validator.call(program).statements).to eq([])
-    expect(validator.call(program).statements).to eq([])
+    first = validator.call(program).statements.fetch(0)
+    second = validator.call(program).statements.fetch(0)
+    expect(first).to be_a(Rubast::IR::NamespaceBody)
+    expect(second).to eq(first)
+    expect(second.receiver.result_type).not_to equal(first.receiver.result_type)
 
     construction = Rubast::IR::Call.new(
       name: :new, receiver: Rubast::IR::ConstantRead.new(name: :Example, span: span),

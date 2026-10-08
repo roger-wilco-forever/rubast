@@ -163,11 +163,12 @@ module Rubast
         end
 
         def yielding_body(context, type)
-          saved = [@receiver_type, @method_context, @yield_context, @return_context, @retry_context]
-          @receiver_type, @method_context, @yield_context, @return_context, @retry_context = context.fetch(:lexical)
+          saved = [@receiver_type, @method_context, @yield_context, @return_context, @retry_context, @constant_scopes]
+          @receiver_type, @method_context, @yield_context, @return_context,
+            @retry_context, @constant_scopes = context.fetch(:lexical)
           iterator_body(context.fetch(:block), type, context.fetch(:locals), exit_context: context)
         ensure
-          @receiver_type, @method_context, @yield_context, @return_context, @retry_context = saved
+          @receiver_type, @method_context, @yield_context, @return_context, @retry_context, @constant_scopes = saved
         end
 
         def check_ignored_block(context)
@@ -189,8 +190,6 @@ module Rubast
       def validate_block_call(node, locals)
         call = node.call
         unsupported(node) if call.safe_navigation
-        return validate_constructor_block(node, locals) if call.receiver.is_a?(IR::ConstantRead)
-
         receiver = validate_expression(call.receiver || IR::SelfRead.new(result_type: nil, span: node.span), locals)
         type = type_of(receiver, locals)
         return defer_block_call(node, receiver, locals) if type == :unknown
@@ -200,6 +199,8 @@ module Rubast
           return validate_iterator_receiver(node, receiver, type, locals)
         end
         target = lookup_method(type.class_name, call.name)
+        return validate_constructor_block(node, locals, receiver) if constructor_call?(call, type, target)
+
         unsupported(node) unless target && call.name != :initialize
         validate_user_block(node, receiver, type, target, locals)
       end
@@ -215,6 +216,7 @@ module Rubast
       end
 
       def validate_user_block(node, receiver, type, target, locals)
+        check_method_visibility(node.call, type, target)
         prepared = prepare_arguments(node.call, target.last, locals, owner: target.first)
         return defer_block_call(node, receiver, locals) unless prepared.last
 
@@ -228,7 +230,8 @@ module Rubast
 
       def new_literal_context(block, locals)
         context = new_block_context(block, locals)
-        context[:lexical] = [@receiver_type, @method_context, @yield_context, @return_context, @retry_context]
+        context[:lexical] =
+          [@receiver_type, @method_context, @yield_context, @return_context, @retry_context, @constant_scopes]
         @literal_blocks[context.fetch(:id)] = context
         context
       end
