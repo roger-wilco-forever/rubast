@@ -19,7 +19,7 @@ The CLI supports `run` and `emit-rust FILE -o DIR`. Use `emit-rust` to retain a 
 | CLI and error presentation | [`bin/rubast`](../bin/rubast), [`lib/rubast/compilation_error.rb`](../lib/rubast/compilation_error.rb) |
 | Source bytes and Prism parse errors | [`app/source/reader.rb`](../app/source/reader.rb), [`app/frontend/parser.rb`](../app/frontend/parser.rb) |
 | Prism syntax to IR | [`app/frontend/normalizer.rb`](../app/frontend/normalizer.rb), [`lib/rubast/ir.rb`](../lib/rubast/ir.rb) |
-| Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`app/analysis/loop_analysis.rb`](../app/analysis/loop_analysis.rb), [`app/analysis/collections.rb`](../app/analysis/collections.rb) |
+| Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`app/analysis/loop_analysis.rb`](../app/analysis/loop_analysis.rb), [`app/analysis/collections.rb`](../app/analysis/collections.rb), [`app/analysis/hashes.rb`](../app/analysis/hashes.rb) |
 | Generated Rust and Cargo manifest | [`app/backend/rust.rb`](../app/backend/rust.rb), [`lib/rubast/generated_project.rb`](../lib/rubast/generated_project.rb) |
 | Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs) |
 | Project files and runtime copying | [`app/build/writer.rb`](../app/build/writer.rb) |

@@ -77,10 +77,10 @@ module Rubast
         def validate_index_write(node, locals)
           receiver = validate_expression(node.receiver, locals)
           type = type_of(receiver, locals)
-          unsupported(node) unless type == :unknown || array_type?(type)
+          unsupported(node) unless type == :unknown || array_type?(type) || hash_type?(type)
           call = IR::Call.new(name: :[]=, receiver: receiver, arguments: [node.index, node.value],
                               safe_navigation: false, span: node.span)
-          return validate_collection_call(call, receiver, type, locals) if array_type?(type)
+          return validate_collection_call(call, receiver, type, locals) if array_type?(type) || hash_type?(type)
 
           arguments, types = validate_arguments(call.arguments, [0, 1], locals)
           node.with(receiver: receiver, index: arguments.first, value: arguments.last,
@@ -93,7 +93,11 @@ module Rubast
       private
 
       def validate_collection_expression(node, locals)
-        node.is_a?(IR::ArrayLiteral) ? validate_array(node, locals) : validate_index_write(node, locals)
+        case node
+        when IR::ArrayLiteral then validate_array(node, locals)
+        when IR::HashLiteral then validate_hash(node, locals)
+        else validate_index_write(node, locals)
+        end
       end
 
       def safe_chomp_type(node, locals)
@@ -113,12 +117,14 @@ module Rubast
       end
 
       def collection_call?(node, type)
-        array_type?(type) || (string_type?(type) && (STRING_READS + STRING_WRITES).include?(node.name))
+        return true if array_type?(type) || hash_type?(type)
+
+        string_type?(type) && (STRING_READS + STRING_WRITES).include?(node.name)
       end
 
       def collection_arity?(node, family)
         arity = case node.name
-                when :length, :bytesize, :dup, :chomp, :chomp!, :clear, :! then 0
+                when :length, :keys, :values, :bytesize, :dup, :chomp, :chomp!, :clear, :! then 0
                 when :[]= then 2
                 when :push then node.arguments.length if family == :array
                 else 1
@@ -127,20 +133,33 @@ module Rubast
       end
 
       def validate_collection_call(node, receiver, type, locals)
-        family = array_type?(type) ? :array : :string
-        unsupported(node) if family == :array && !ARRAY_OPERATIONS.include?(node.name)
+        family = collection_family(type)
+        operations = family == :hash ? Hashes::HASH_OPERATIONS : ARRAY_OPERATIONS
+        unsupported(node) if family != :string && !operations.include?(node.name)
         unsupported(node) unless collection_arity?(node, family)
         names = (0...node.arguments.length).to_a
         arguments, types = validate_arguments(node.arguments, names, locals)
         result = if types.value?(:never)
                    :never
-                 elsif family == :array
-                   array_result(node, type, types)
                  else
-                   string_result(node, type, types)
+                   collection_result(node, family, type, types)
                  end
         IR::Builtin.new(family: family, name: node.name, receiver: receiver, arguments: arguments,
                         result_type: result, span: node.span)
+      end
+
+      def collection_family(type)
+        return :array if array_type?(type)
+
+        hash_type?(type) ? :hash : :string
+      end
+
+      def collection_result(node, family, type, types)
+        case family
+        when :array then array_result(node, type, types)
+        when :hash then hash_result(node, type, types)
+        else string_result(node, type, types)
+        end
       end
 
       def string_result(node, receiver_type, types)

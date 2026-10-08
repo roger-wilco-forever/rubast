@@ -71,21 +71,6 @@ module Rubast
                            result_type: nil, span: span(origin, source))
         end
 
-        def normalize_literal(node, source)
-          case node
-          when Prism::TrueNode, Prism::FalseNode
-            IR::BooleanLiteral.new(value: node.is_a?(Prism::TrueNode), span: span(node, source))
-          when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
-          when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
-          when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
-          when Prism::StringNode
-            IR::StringLiteral.new(value: node.unescaped, frozen: node.frozen?, span: span(node, source))
-          when Prism::ArrayNode
-            IR::ArrayLiteral.new(elements: node.elements.map { |element| normalize(element, source) }.freeze,
-                                 result_type: nil, span: span(node, source))
-          end
-        end
-
         def normalize_variable(node, source)
           case node
           when Prism::SelfNode then IR::SelfRead.new(result_type: nil, span: span(node, source))
@@ -120,6 +105,38 @@ module Rubast
           unsupported(node, source) unless statements.one?
 
           normalize(statements.first, source)
+        end
+      end
+
+      module Literals
+        private
+
+        def normalize_literal(node, source)
+          case node
+          when Prism::TrueNode, Prism::FalseNode
+            IR::BooleanLiteral.new(value: node.is_a?(Prism::TrueNode), span: span(node, source))
+          when Prism::NilNode then IR::NilLiteral.new(span: span(node, source))
+          when Prism::ConstantReadNode then IR::ConstantRead.new(name: node.name, span: span(node, source))
+          when Prism::IntegerNode then IR::IntegerLiteral.new(value: node.value, span: span(node, source))
+          when Prism::StringNode
+            IR::StringLiteral.new(value: node.unescaped, frozen: node.frozen?, span: span(node, source))
+          when Prism::SymbolNode then IR::SymbolLiteral.new(value: node.unescaped, span: span(node, source))
+          when Prism::ArrayNode, Prism::HashNode then normalize_collection_literal(node, source)
+          end
+        end
+
+        def normalize_collection_literal(node, source)
+          hash = node.is_a?(Prism::HashNode)
+          elements = hash ? node.elements.flat_map { |element| normalize_pair(element, source) } : node.elements
+          (hash ? IR::HashLiteral : IR::ArrayLiteral).new(
+            elements: elements.map { |element| normalize(element, source) }.freeze,
+            result_type: nil, span: span(node, source)
+          )
+        end
+
+        def normalize_pair(node, source)
+          unsupported(node, source) unless node.is_a?(Prism::AssocNode)
+          [node.key, node.value]
         end
       end
 
@@ -165,6 +182,7 @@ module Rubast
       end
 
       include Expressions
+      include Literals
       include Calls
 
       private
@@ -181,7 +199,7 @@ module Rubast
         case node
         when Prism::ClassNode then normalize_class(node, source)
         when Prism::ConstantReadNode, Prism::IntegerNode, Prism::StringNode, Prism::NilNode, Prism::TrueNode, Prism::FalseNode,
-             Prism::ArrayNode
+             Prism::ArrayNode, Prism::HashNode, Prism::SymbolNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
              Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode,

@@ -55,6 +55,7 @@ module Rubast
         when IR::NilLiteral then "Value::Nil"
         when IR::IntegerLiteral then "Value::Integer(#{node.value})"
         when IR::StringLiteral then "Value::from(#{rust_string(node.value)}.to_owned())"
+        when IR::SymbolLiteral then "Value::Symbol(#{rust_string(node.value)})"
         end
       end
 
@@ -144,7 +145,7 @@ module Rubast
         private
 
         def emit_allocation_or_call(node, lines)
-          if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::Builtin)
+          if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral) || node.is_a?(IR::Builtin)
             emit_collection(node, lines)
           else
             emit_object(node, lines)
@@ -152,15 +153,21 @@ module Rubast
         end
 
         def emit_collection(node, lines)
-          if node.is_a?(IR::ArrayLiteral)
-            elements = node.elements.map { |element| emit_value(emit_expression(element, lines), lines) }
-            return emit_value("runtime.new_array(vec![#{elements.join(', ')}])", lines)
-          end
+          return emit_container(node, lines) if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral)
+
           receiver = emit_value(emit_expression(node.receiver, lines), lines)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
           inputs = "#{Rust.rust_string(node.name.to_s)}, #{receiver}, vec![#{arguments.join(', ')}]"
-          target = node.family == :array ? "runtime.array_operation" : "Runtime::string_operation"
+          target = node.family == :string ? "Runtime::string_operation" : "runtime.#{node.family}_operation"
           emit_value("#{target}(#{inputs})", lines)
+        end
+
+        def emit_container(node, lines)
+          elements = node.elements.map { |element| emit_value(emit_expression(element, lines), lines) }
+          hash = node.is_a?(IR::HashLiteral)
+          target = hash ? "new_hash" : "new_array"
+          elements = elements.each_slice(2).map { |key, value| "(#{key}, #{value})" } if hash
+          emit_value("runtime.#{target}(vec![#{elements.join(', ')}])", lines)
         end
       end
 
@@ -207,13 +214,15 @@ module Rubast
 
         def emit_expression(node, lines)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral then Rust.literal(node)
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral
+            Rust.literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
-          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::Builtin then emit_allocation_or_call(node, lines)
+          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin
+            emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"

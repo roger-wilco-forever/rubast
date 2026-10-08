@@ -2,23 +2,23 @@
 
 Each file is a standalone Ruby program. Run it independently rather than loading all examples into one Ruby process. Examples and reference outputs target the pinned CRuby version in `.ruby-version`.
 
-The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb).
+The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb), and [ordered definition storage](definition_store.rb).
 
 ## Realistic workload corpus
 
 The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All seven run successfully on CRuby with the documented inputs; five currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after stage 9 on 2026-10-08:
+Observed after stage 10 on 2026-10-08:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
 | [invoice.rb](workloads/invoice.rb) | Customer, one invoice line, rejected/accepted payment, quantity update through an alias | Matches CRuby | None on the supplied fixture | Multiple lines would need collections; no general billing or validation contract is claimed |
 | [shipping.rb](workloads/shipping.rb) | Standard/express pricing with an inherited constructor and overridden calculation | Matches CRuby | None on the supplied fixture | Built-in superclasses, blocks, and extended arguments remain outside the subset |
 | [log_summary.rb](workloads/log_summary.rb) | Read status lines until EOF and count successful/failed entries | `E_INTEGER_RANGE`, line 7 | Unbounded integer growth across loop iterations | Loops and `+=` now normalize; accepting this unchanged program still requires a sound range policy or Ruby-compatible large integers |
-| [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 25 | `BlockArgumentNode` (`&:subtotal`) | Array storage/append now work; `Array#sum`, symbols, and Symbol-to-Proc block conversion still need supported-call contracts (stages 10–11) |
+| [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 25 | `BlockArgumentNode` (`&:subtotal`) | Array storage/append now work; `Array#sum` and Symbol-to-Proc block conversion still need supported-call contracts (stage 11); symbol literals now work |
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |
 | [unit_pricing.rb](workloads/unit_pricing.rb) | Divide a subtotal by quantity and return a message for an invalid quantity | `E_UNSUPPORTED`, line 11 | Division is rejected for zero even though an earlier guard returns | Predicate/range narrowing or proven unreachable-path handling; conservative analysis currently checks the division path |
-| [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | `E_UNSUPPORTED`, line 4 | Singleton `DefNode` (`def self.defs`) | Class methods and class-body execution/state (stage 14), arrays/concatenation/indexing/equality, symbols/hashes (stages 9–10), `nil?`, and `p` (stage 16); each needs its own contract |
+| [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | `E_UNSUPPORTED`, line 4 | Singleton `DefNode` (`def self.defs`) | Class methods and class-body execution/state (stage 14), array concatenation/equality (array/hash storage, indexing, and symbol literals now work), `nil?`, and `p` (stage 16); each needs its own contract |
 
 The first diagnostic can hide subsequent blockers. For example, accepting array syntax would not make Symbol-to-Proc aggregation work automatically. The notification and unit-pricing examples exercise analysis limits even though their syntax already normalizes successfully. Keep these programs intact when implementing support; do not remove useful constructs merely to turn a row green.
 

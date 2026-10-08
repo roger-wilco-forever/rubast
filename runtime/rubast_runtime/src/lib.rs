@@ -8,6 +8,7 @@ pub enum Value {
     Nil,
     Bool(bool),
     Integer(i64),
+    Symbol(&'static str),
     String(Rc<RefCell<String>>),
     Object(usize),
 }
@@ -25,6 +26,7 @@ impl Value {
             Self::Nil => String::new(),
             Self::Bool(value) => value.to_string(),
             Self::Integer(number) => number.to_string(),
+            Self::Symbol(name) => name.to_owned(),
             Self::String(text) => text.borrow().clone(),
             Self::Object(_) => unreachable!("object string conversion is unsupported"),
         }
@@ -40,6 +42,7 @@ impl From<String> for Value {
 enum Object {
     Instance(HashMap<&'static str, Value>),
     Array(Vec<Value>),
+    Hash(Vec<(Value, Value)>),
 }
 
 pub struct Runtime {
@@ -164,6 +167,68 @@ impl Runtime {
         }
     }
 
+    pub fn new_hash(&mut self, pairs: Vec<(Value, Value)>) -> Value {
+        let id = self.objects.len();
+        self.objects.push(Object::Hash(Vec::new()));
+        let receiver = Value::Object(id);
+        for (key, value) in pairs {
+            self.hash_operation("[]=", receiver.clone(), vec![key, value]);
+        }
+        receiver
+    }
+
+    pub fn hash_operation(
+        &mut self,
+        name: &str,
+        receiver: Value,
+        mut arguments: Vec<Value>,
+    ) -> Value {
+        let Value::Object(id) = receiver else {
+            unreachable!("hash operations require a proven hash receiver");
+        };
+        let Object::Hash(entries) = &mut self.objects[id] else {
+            unreachable!("hash operations require hash storage");
+        };
+        match name {
+            "length" => Value::Integer(entries.len().try_into().expect("hash length fits i64")),
+            "!" => Value::Bool(false),
+            "keys" | "values" => {
+                let values = entries
+                    .iter()
+                    .map(|(key, value)| {
+                        if name == "keys" {
+                            key.clone()
+                        } else {
+                            value.clone()
+                        }
+                    })
+                    .collect();
+                self.new_array(values)
+            }
+            "[]" | "[]=" | "key?" => {
+                let key = arguments.remove(0);
+                // ponytail: linear lookup preserves insertion order; use an ordered map if large hashes matter.
+                let slot = entries.iter().position(|(existing, _)| existing == &key);
+                match name {
+                    "key?" => Value::Bool(slot.is_some()),
+                    "[]" => slot
+                        .map(|index| entries[index].1.clone())
+                        .unwrap_or(Value::Nil),
+                    _ => {
+                        let value = arguments.remove(0);
+                        if let Some(index) = slot {
+                            entries[index].1 = value.clone();
+                        } else {
+                            entries.push((key, value.clone()));
+                        }
+                        value
+                    }
+                }
+            }
+            _ => unreachable!("unknown hash operation"),
+        }
+    }
+
     pub fn get_ivar(&self, receiver: &Value, name: &'static str) -> Value {
         let Value::Object(id) = receiver else {
             unreachable!("instance variables require an object");
@@ -206,7 +271,7 @@ impl Runtime {
                 Self::chomp_text(&mut copy);
                 Value::from(copy)
             }
-            Value::Bool(_) | Value::Integer(_) | Value::Object(_) => {
+            Value::Bool(_) | Value::Integer(_) | Value::Symbol(_) | Value::Object(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }
         }

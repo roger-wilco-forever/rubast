@@ -26,6 +26,7 @@ module Rubast
           return :never if values.empty?
           return :unknown if values.include?(:unknown)
 
+          check_hash_shapes(values, origin)
           objects = values.grep(IR::ObjectType)
           return join_scalars(values) if objects.empty?
 
@@ -49,6 +50,7 @@ module Rubast
           when IR::IntegerLiteral then IR::IntegerType.new(minimum: node.value, maximum: node.value)
           when IR::BooleanLiteral then :boolean
           when IR::StringLiteral then node.frozen ? :frozen_string : :string
+          when IR::SymbolLiteral then IR::SymbolType.new(name: node.value)
           end
         end
 
@@ -84,6 +86,10 @@ module Rubast
         COMPARISONS = %i[< <= > >=].freeze
 
         private
+
+        def validate_dispatch(node, locals)
+          node.is_a?(IR::Call) ? validate_call(node, locals) : validate_super(node, locals)
+        end
 
         def validate_operation(node, receiver, receiver_type, locals)
           arity = %i[! +@ -@].include?(node.name) ? 0 : 1
@@ -376,6 +382,7 @@ module Rubast
         include InstanceState
         include LoopAnalysis
         include Collections
+        include Hashes
 
         def call(program)
           @classes = {}
@@ -437,7 +444,8 @@ module Rubast
 
         def validate_expression(node, locals)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral then validate_literal(node)
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral
+            validate_literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
           when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit then validate_flow(node, locals)
@@ -445,13 +453,9 @@ module Rubast
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
           when IR::Call, IR::Super then validate_dispatch(node, locals)
-          when IR::ArrayLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
+          when IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
           else unsupported(node)
           end
-        end
-
-        def validate_dispatch(node, locals)
-          node.is_a?(IR::Call) ? validate_call(node, locals) : validate_super(node, locals)
         end
 
         def validate_call(node, locals)
@@ -502,7 +506,7 @@ module Rubast
       def validate_literal(node)
         case node
         when IR::IntegerLiteral then validate_integer(node)
-        when IR::StringLiteral then validate_string(node)
+        when IR::StringLiteral, IR::SymbolLiteral then validate_string(node)
         when IR::NilLiteral, IR::BooleanLiteral then node
         end
       end
@@ -521,13 +525,14 @@ module Rubast
 
       def type_of(node, locals)
         case node
-        when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral then literal_type(node)
+        when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral, IR::SymbolLiteral
+          literal_type(node)
         when IR::LoopExit then :never
         when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
-             IR::Loop, IR::ArrayLiteral, IR::IndexWrite, IR::Builtin
+             IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin
           node.result_type
         end
       end
@@ -573,7 +578,7 @@ module Rubast
 
         raise CompilationError.new(
           code: "E_ENCODING",
-          message: "only UTF-8 string literals are supported",
+          message: "only UTF-8 string and symbol literals are supported",
           span: node.span
         )
       end
