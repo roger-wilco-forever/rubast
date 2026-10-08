@@ -8,10 +8,15 @@ module Rubast
       # ponytail: emit a body per known step; group identical dispatch into loops if generated size matters.
       def emit_iterator(node, lines)
         receiver = emit_value(emit_expression(node.receiver, lines), lines)
-        results = node.steps.map { |step| emit_iterator_step(node, step, receiver, lines) }
-        return "#{receiver}.clone()" unless node.name == :map
-
-        emit_value("runtime.new_array(vec![#{results.join(', ')}])", lines)
+        statements = []
+        results = node.steps.map { |step| emit_iterator_step(node, step, receiver, statements) }
+        result = if node.name == :map
+                   emit_value("runtime.new_array(vec![#{results.join(', ')}])", statements)
+                 else
+                   "#{receiver}.clone()"
+                 end
+        statements << "    #{result}"
+        emit_value("'block_exit_#{node.exit_id}: {\n#{statements.join("\n")}\n    }", lines)
       end
 
       def emit_iterator_step(node, step, receiver, lines)

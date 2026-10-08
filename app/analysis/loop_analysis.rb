@@ -38,10 +38,12 @@ module Rubast
         end
 
         def loop_exit_lists
-          [@return_exits, @loop_context&.fetch(:break), @loop_context&.fetch(:next)].compact
+          [@return_exits, @loop_context&.fetch(:break), @loop_context&.fetch(:next), *block_exit_lists].compact
         end
 
         def validate_loop_exit(node, locals)
+          return validate_block_exit(node, locals) unless @loop_context
+
           unsupported(node) unless @loop_context && !@loop_context.fetch(:predicate)
           value = validate_expression(node.value, locals)
           type = type_of(value, locals)
@@ -136,13 +138,13 @@ module Rubast
           predicate = loop_predicate(node, locals)
           continuing, ending = loop_guard_states(predicate, node, locals)
           restore(continuing, locals) if continuing
-          return_count = @return_exits&.length
+          exit_counts = flow_exit_counts
           body = validate_expression(node.body, locals)
           back = loop_back_states(body, locals)
           unless continuing
             back = []
             @loop_context[:break].clear
-            @return_exits&.slice!(return_count..)
+            restore_flow_exits(exit_counts)
           end
           [node.with(predicate: predicate, body: body), back, ending]
         end
@@ -151,12 +153,12 @@ module Rubast
           body = validate_expression(node.body, locals)
           back = loop_back_states(body, locals)
           merge_states(back, locals, node)
-          return_count = @return_exits&.length
+          exit_counts = flow_exit_counts
           predicate = loop_predicate(node, locals)
           continuing, ending = loop_guard_states(predicate, node, locals)
           if back.empty?
             continuing = ending = nil
-            @return_exits&.slice!(return_count..)
+            restore_flow_exits(exit_counts)
           end
           [node.with(predicate: predicate, body: body), [continuing].compact, ending]
         end
@@ -167,8 +169,8 @@ module Rubast
           states
         end
 
-        def loop_pass(node, head, locals, return_count)
-          @return_exits&.slice!(return_count..)
+        def loop_pass(node, head, locals, exit_counts)
+          restore_flow_exits(exit_counts)
           restore(head, locals)
           loop_iteration(node, locals)
         end
@@ -184,9 +186,9 @@ module Rubast
         saved_context = @loop_context
         @loop_depth = (@loop_depth || 0) + 1
         entry = snapshot(locals)
-        return_count = @return_exits&.length
-        head = solve_loop(node, entry, locals, return_count)
-        value, _, ending = loop_pass(node, head, locals, return_count)
+        exit_counts = flow_exit_counts
+        head = solve_loop(node, entry, locals, exit_counts)
+        value, _, ending = loop_pass(node, head, locals, exit_counts)
         exits = @loop_context.fetch(:break)
         states = [ending, *exits.map(&:last)].compact
         restore(entry, locals)
@@ -199,11 +201,11 @@ module Rubast
         @loop_context = saved_context
       end
 
-      def solve_loop(node, entry, locals, return_count)
+      def solve_loop(node, entry, locals, exit_counts)
         head = entry
         # ponytail: reject after 16 passes; use a richer domain if real loops need more convergence steps.
         16.times do
-          value, back, = loop_pass(node, head, locals, return_count)
+          value, back, = loop_pass(node, head, locals, exit_counts)
           merge_states([entry, *back], locals, node)
           current = snapshot(locals)
           return head if same_loop_state?(head, current)

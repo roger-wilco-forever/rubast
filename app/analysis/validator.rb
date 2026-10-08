@@ -344,7 +344,7 @@ module Rubast
         def validate_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
           saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
-                           @yield_context]
+                           @yield_context, @block_exit_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
@@ -352,17 +352,20 @@ module Rubast
           @receiver_type = receiver
           @method_context = [owner, method]
           @loop_context = nil
+          @block_exit_context = nil
           @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           body = validate_expression(method.body, locals)
           method_result(body, locals, origin)
         ensure
-          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context, @yield_context = saved_context
+          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
+            @yield_context, @block_exit_context = saved_context
         end
 
         def method_result(body, locals, origin)
-          types = @return_exits.map(&:first)
-          states = @return_exits.map(&:last)
+          exits = @return_exits + (@yield_context&.fetch(:exits) || [])
+          types = exits.map(&:first)
+          states = exits.map(&:last)
           unless body.result_type == :never
             types << body.result_type
             states << snapshot(locals)
@@ -434,6 +437,8 @@ module Rubast
           @active_methods = []
           @objects = []
           @captured_scopes = []
+          @block_exit_contexts = []
+          @next_block_exit = 0
           locals = program.locals.to_h { |name| [name, :nil] }
           statements = program.statements.filter_map { |node| validate_statement(node, locals) }
           IR::Program.new(statements: statements.freeze, locals: program.locals, warnings: program.warnings)
@@ -547,7 +552,7 @@ module Rubast
         case node
         when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral, IR::SymbolLiteral
           literal_type(node)
-        when IR::LoopExit then :never
+        when IR::LoopExit, IR::BlockExit then :never
         when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)

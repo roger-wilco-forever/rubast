@@ -3,6 +3,64 @@
 module Rubast
   module Analysis
     module Blocks
+      module Exits
+        private
+
+        def new_block_context(block, locals)
+          @next_block_exit += 1
+          { id: @next_block_exit, block: block, locals: locals, exits: [], capture_depth: @captured_scopes.length }
+        end
+
+        def with_block_exit_context(context)
+          saved = @block_exit_context
+          @block_exit_contexts << context
+          @block_exit_context = context
+          yield
+        ensure
+          @block_exit_contexts.pop
+          @block_exit_context = saved
+        end
+
+        def block_exit_lists
+          @block_exit_contexts.map { |context| context.fetch(:exits) }
+        end
+
+        def flow_exit_counts
+          loop_exit_lists.map { |list| [list, list.length] }
+        end
+
+        def restore_flow_exits(counts)
+          counts.each { |list, count| list.slice!(count..) }
+        end
+
+        def validate_block_exit(node, locals)
+          unsupported(node) unless node.kind == :break && @block_exit_context
+          value = validate_expression(node.value, locals)
+          type = type_of(value, locals)
+          check_exiting_traversals(node)
+          @block_exit_context.fetch(:exits) << [type, block_exit_state(locals)] unless type == :never
+          IR::BlockExit.new(target: @block_exit_context.fetch(:id), value: value, span: node.span)
+        end
+
+        def check_exiting_traversals(node)
+          @block_exit_contexts.each do |context|
+            traversal = context[:traversal]
+            check_iterator_length(*traversal, node) if traversal
+          end
+        end
+
+        def block_exit_state(locals)
+          root = @block_exit_context.fetch(:locals)
+          state = snapshot(locals)
+          state[:locals] = locals.slice(*root.keys)
+          state[:captures] = state.fetch(:captures).take(@block_exit_context.fetch(:capture_depth))
+          state.fetch(:captures).each do |scope, values|
+            values.replace(state.fetch(:locals)) if scope.equal?(root)
+          end
+          state
+        end
+      end
+
       module Captures
         private
 
@@ -38,19 +96,22 @@ module Rubast
         def yielding_body(context, type)
           saved = [@receiver_type, @method_context, @yield_context]
           @receiver_type, @method_context, @yield_context = context.fetch(:lexical)
-          iterator_body(context.fetch(:block), type, context.fetch(:locals))
+          iterator_body(context.fetch(:block), type, context.fetch(:locals), exit_context: context)
         ensure
           @receiver_type, @method_context, @yield_context = saved
         end
 
         def check_ignored_block(context)
           before = snapshot(context.fetch(:locals))
+          exit_counts = flow_exit_counts
           yielding_body(context, :unknown)
         ensure
           restore(before, context.fetch(:locals))
+          restore_flow_exits(exit_counts)
         end
       end
 
+      include Exits
       include Captures
       include Yielding
 
@@ -83,25 +144,36 @@ module Rubast
       end
 
       def validate_user_block(node, receiver, type, target, locals)
-        owner, method = target
+        method = target.last
         unsupported(node) unless node.call.arguments.length == method.parameters.length
         arguments, parameters = validate_arguments(node.call.arguments, method.parameters, locals)
-        context = { block: node.block, locals: locals, lexical: [@receiver_type, @method_context, @yield_context] }
+        context = new_block_context(node.block, locals)
+        context[:lexical] = [@receiver_type, @method_context, @yield_context]
         @captured_scopes << locals
-        body = validate_method_body(method, parameters, type, node, owner: owner, block: context)
-        check_ignored_block(context) unless context[:used]
-        body = body.with(result_type: :never) if parameters.value?(:never)
-        resolved_block_invocation(node, receiver, target, arguments, body)
+        context[:capture_depth] = @captured_scopes.length
+        body = user_block_body(node, type, target, parameters, context)
+        invocation = resolved_block_method(node, receiver, target, arguments, body)
+        IR::BlockInvocation.new(exit_id: context.fetch(:id), invocation: invocation,
+                                result_type: body.result_type, span: node.span)
       ensure
         @captured_scopes.pop if context
       end
 
-      def resolved_block_invocation(node, receiver, target, arguments, body)
+      def user_block_body(node, type, target, parameters, context)
         owner, method = target
-        invocation = IR::MethodCall.new(class_name: owner, name: method.name, receiver: receiver, arguments: arguments,
-                                        parameters: method.parameters, locals: method.locals, body: body,
-                                        result_type: body.result_type, span: node.span)
-        IR::BlockInvocation.new(invocation: invocation, result_type: body.result_type, span: node.span)
+        body = with_block_exit_context(context) do
+          result = validate_method_body(method, parameters, type, node, owner: owner, block: context)
+          check_ignored_block(context) unless context[:used]
+          result
+        end
+        parameters.value?(:never) ? body.with(result_type: :never) : body
+      end
+
+      def resolved_block_method(node, receiver, target, arguments, body)
+        owner, method = target
+        IR::MethodCall.new(class_name: owner, name: method.name, receiver: receiver, arguments: arguments,
+                           parameters: method.parameters, locals: method.locals, body: body,
+                           result_type: body.result_type, span: node.span)
       end
     end
   end

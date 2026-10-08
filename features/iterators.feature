@@ -266,7 +266,6 @@ Feature: Bounded inline iterators with lexical block locals
       | [1].each(2) { puts 1 }                                                                      |
       | "Ada".each { puts 1 }                                                                      |
       | {}.each { puts 1 }                                                                          |
-      | [1].each { break }                                                                          |
       | [1].each { next }                                                                           |
       | class Example; def go; [1].each { return 1 }; end; end; Example.new.go                        |
       | values = [1]; values.each { values.push(2) }                                                 |
@@ -362,6 +361,14 @@ Feature: Bounded inline iterators with lexical block locals
     Given the Ruby source is:
       """
       class Example; def each; 1; end; end; Example.new.each { puts 1 }
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Break without a value returns nil from each
+    Given the Ruby source is:
+      """
+      [1].each { break }
       """
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby

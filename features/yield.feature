@@ -285,15 +285,14 @@ Feature: Yield to literal blocks in user instance methods
     Then the diagnostic has code "E_UNSUPPORTED" at line 2
     And no Rust project was created
 
-  Scenario: Block break remains unsupported
+  Scenario: Block break returns its value from the receiving method
     Given the Ruby source is:
       """
       class Producer; def run; yield; end; end
       Producer.new.run { break 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 2
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Block next remains unsupported
     Given the Ruby source is:

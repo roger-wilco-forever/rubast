@@ -9,29 +9,39 @@ module Rubast
       module Bodies
         private
 
-        def iterator_body(block, value_type, locals)
-          saved_context = @loop_context
+        def iterator_body(block, value_type, locals, exit_context: @block_exit_context)
+          saved_context = [@loop_context, @block_exit_context]
           @loop_context = nil
+          @block_exit_context = exit_context
+          exit_count = block_exit_lists.sum(&:length)
           @loop_depth = (@loop_depth || 0) + 1
           @iterator_steps = (@iterator_steps || 0) + 1
           unsupported(block) if @iterator_steps > MAX_STEPS
           scope = locals.merge(block.locals.to_h { |name| [name, :nil] })
           block.parameters.each { |name| scope[name] = value_type }
           body = validate_expression(block.body, scope)
-          unsupported(block) if body.result_type == :never
+          check_block_fallthrough(block, body, exit_count)
           locals.each_key { |name| locals[name] = scope.fetch(name) }
           body
         ensure
           @loop_depth -= 1
-          @loop_context = saved_context
+          @loop_context, @block_exit_context = saved_context
+        end
+
+        def check_block_fallthrough(block, body, exit_count)
+          unsupported(block) if body.result_type == :never && block_exit_lists.sum(&:length) == exit_count
         end
 
         def check_detached_block(block, locals, summarize: false)
           before = snapshot(locals)
-          iterator_body(block, :unknown, locals)
+          exit_counts = flow_exit_counts
+          with_block_exit_context(new_block_context(block, locals)) do
+            iterator_body(block, :unknown, locals)
+          end
           after = snapshot(locals) if summarize
         ensure
           restore(before, locals)
+          restore_flow_exits(exit_counts)
           summarize_iterator_state(before, after, locals) if after
         end
 
@@ -85,22 +95,43 @@ module Rubast
           check_detached_block(node.block, locals, summarize: true)
           return node.with(call: call.with(receiver: receiver), result_type: :unknown)
         end
-        steps = iterator_steps(node, type, locals)
-        IR::Iterator.new(name: call.name, family: call.name == :times ? :integer : :array, receiver: receiver,
-                         parameters: node.block.parameters, locals: node.block.locals, steps: steps.freeze,
-                         result_type: iterator_result(node, type, steps), span: node.span)
+        context = new_block_context(node.block, locals)
+        with_block_exit_context(context) do
+          steps = iterator_steps(node, type, locals)
+          result = complete_iterator(node, type, steps, context, locals)
+          IR::Iterator.new(exit_id: context.fetch(:id), name: call.name,
+                           family: call.name == :times ? :integer : :array, receiver: receiver,
+                           parameters: node.block.parameters, locals: node.block.locals, steps: steps.freeze,
+                           result_type: result, span: node.span)
+        end
+      end
+
+      def complete_iterator(node, type, steps, context, locals)
+        normal = steps.last&.body&.result_type == :never ? :never : iterator_result(node, type, steps)
+        types = context.fetch(:exits).map(&:first)
+        states = context.fetch(:exits).map(&:last)
+        unless normal == :never
+          types << normal
+          states << snapshot(locals)
+        end
+        merge_states(states, locals, node)
+        join_types(types, node)
       end
 
       def iterator_steps(node, type, locals)
         count = iterator_count(type, node)
         unsupported(node) if count > MAX_STEPS
+        @block_exit_context[:traversal] = [type, count]
         check_detached_block(node.block, locals) if count.zero?
-        (0...count).map do |index|
+        steps = []
+        count.times do |index|
           check_iterator_length(type, count, node)
           body = iterator_body(node.block, iterator_item(type, index, node), locals)
           check_iterator_length(type, count, node)
-          IR::BlockStep.new(index: index, body: body, span: node.block.span)
+          steps << IR::BlockStep.new(index: index, body: body, span: node.block.span)
+          break if body.result_type == :never
         end
+        steps
       end
 
       def iterator_result(node, receiver_type, steps)

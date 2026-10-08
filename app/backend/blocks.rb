@@ -13,7 +13,7 @@ module Rubast
         saved = [@locals, @receiver, @return_label, @loop_labels, @block_context]
         @block_context = saved
         @receiver = receiver
-        @return_label = "method_return_#{@next_temp}"
+        @return_label = "block_exit_#{node.exit_id}"
         @loop_labels = nil
         statements = []
         inline_locals(method.locals, method.parameters.zip(arguments).to_h, statements)
