@@ -266,7 +266,6 @@ Feature: Bounded inline iterators with lexical block locals
       | [1].each(2) { puts 1 }                                                                      |
       | "Ada".each { puts 1 }                                                                      |
       | {}.each { puts 1 }                                                                          |
-      | class Example; def each; 1; end; end; Example.new.each { puts 1 }                             |
       | [1].each { break }                                                                          |
       | [1].each { next }                                                                           |
       | class Example; def go; [1].each { return 1 }; end; end; Example.new.go                        |
@@ -358,3 +357,11 @@ Feature: Bounded inline iterators with lexical block locals
     When I emit a Rust project
     Then the diagnostic has code "E_UNSUPPORTED" at line 5
     And no Rust project was created
+
+  Scenario: A user method can ignore its literal block
+    Given the Ruby source is:
+      """
+      class Example; def each; 1; end; end; Example.new.each { puts 1 }
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

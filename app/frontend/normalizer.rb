@@ -182,6 +182,8 @@ module Rubast
         end
 
         def normalize_invocation(node, source)
+          return normalize_yield(node, source) if node.is_a?(Prism::YieldNode)
+
           if node.is_a?(Prism::CallNode) && node.attribute_write? && node.name == :[]=
             return normalize_index_write(node, source)
           end
@@ -231,7 +233,8 @@ module Rubast
         when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode,
              Prism::WhileNode, Prism::UntilNode, Prism::BreakNode, Prism::NextNode, Prism::BeginNode
           normalize_flow(node, source)
-        when Prism::CallNode, Prism::SuperNode, Prism::ForwardingSuperNode then normalize_invocation(node, source)
+        when Prism::CallNode, Prism::SuperNode, Prism::ForwardingSuperNode, Prism::YieldNode
+          normalize_invocation(node, source)
         else unsupported(node, source)
         end
       end

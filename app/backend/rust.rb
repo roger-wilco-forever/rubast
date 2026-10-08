@@ -36,13 +36,26 @@ module Rubast
         # Types can contain cycles; only resolved calls affect emitted dispatch.
         children = node.to_h.except(:span, :result_type).values
         nested = children.flat_map { |value| Array(value).flat_map { |child| dispatches(child) } }
+        dispatch_signature(node, nested)
+      end
+
+      def self.dispatch_signature(node, nested)
         case node
         when IR::MethodCall then [[node.class_name, node.name, nested]]
         when IR::NewObject then [[node.class_name, :initialize, nested]]
         when IR::Builtin then [[node.family, node.name, nested]]
+        when IR::BlockInvocation then [[node.invocation.class_name, node.invocation.name,
+                                        block_signature(node.invocation.body)]]
         when IR::Iterator then [[node.family, node.name, node.steps.length, nested]]
         else nested
         end
+      end
+
+      def self.block_signature(node)
+        return node.map { |child| block_signature(child) } if node.is_a?(Array)
+        return node unless node.respond_to?(:span)
+
+        [node.class.name, node.to_h.except(:span, :result_type).transform_values { |child| block_signature(child) }]
       end
 
       ESCAPES = {
@@ -80,13 +93,18 @@ module Rubast
           when IR::Puts, IR::Sequence then emit_body(node, lines)
           when IR::Conditional then emit_conditional(node, lines)
           when IR::Loop, IR::LoopExit then emit_loop_flow(node, lines)
-          when IR::Return then "{ return #{emit_expression(node.value, lines)}; }"
+          when IR::Return then emit_return(node, lines)
           when IR::Operation
             operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
             name = Rust.rust_string(node.name.to_s)
             function = operands.one? ? "unary" : "binary"
             emit_value("Runtime::#{function}(#{name}, #{operands.join(', ')})", lines)
           end
+        end
+
+        def emit_return(node, lines)
+          target = @return_label ? "break '#{@return_label}" : "return"
+          "{ #{target} #{emit_expression(node.value, lines)}; }"
         end
 
         def emit_conditional(node, lines)
@@ -147,6 +165,8 @@ module Rubast
 
         def emit_allocation_or_call(node, lines)
           return emit_iterator(node, lines) if node.is_a?(IR::Iterator)
+          return emit_block_invocation(node, lines) if node.is_a?(IR::BlockInvocation)
+          return emit_yield(node, lines) if node.is_a?(IR::YieldInvoke)
 
           if node.is_a?(IR::ArrayLiteral) || node.is_a?(IR::HashLiteral) || node.is_a?(IR::Builtin)
             emit_collection(node, lines)
@@ -179,6 +199,7 @@ module Rubast
         include Loops
         include Collections
         include Iterators
+        include Blocks
 
         def initialize(functions)
           @functions = functions
@@ -225,7 +246,8 @@ module Rubast
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString then emit_interpolation(node, lines)
-          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin, IR::Iterator
+          when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin, IR::Iterator,
+               IR::BlockInvocation, IR::YieldInvoke
             emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit
             emit_flow(node, lines)

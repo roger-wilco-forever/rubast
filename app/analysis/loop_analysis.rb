@@ -7,7 +7,7 @@ module Rubast
         private
 
         def loop_maps(state)
-          [state.fetch(:locals), *state.fetch(:fields).values.map(&:last)]
+          [state.fetch(:locals), *state.fetch(:fields).values.map(&:last), *state.fetch(:captures).map(&:last)]
         end
 
         def same_loop_state?(first, second)

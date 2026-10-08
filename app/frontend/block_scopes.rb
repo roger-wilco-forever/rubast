@@ -24,6 +24,11 @@ module Rubast
         @scopes = previous
       end
 
+      def normalize_yield(node, source)
+        IR::Yield.new(arguments: (node.arguments&.arguments || []).map { |arg| normalize(arg, source) }.freeze,
+                      result_type: nil, span: span(node, source))
+      end
+
       def normalize_block_call(node, source)
         block = node.block
         unsupported(block, source) unless block.is_a?(Prism::BlockNode)

@@ -25,6 +25,9 @@ module Rubast
     InstanceWrite = Data.define(:name, :value, :span)
     MethodCall = Data.define(:class_name, :name, :receiver, :arguments, :parameters, :locals, :body, :result_type,
                              :span)
+    Yield = Data.define(:arguments, :result_type, :span)
+    YieldInvoke = Data.define(:arguments, :parameters, :locals, :body, :result_type, :span)
+    BlockInvocation = Data.define(:invocation, :result_type, :span)
     Block = Data.define(:parameters, :locals, :body, :span)
     BlockCall = Data.define(:call, :block, :result_type, :span)
     Iterator = Data.define(:name, :family, :receiver, :parameters, :locals, :steps, :result_type, :span)

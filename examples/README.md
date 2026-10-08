@@ -2,18 +2,18 @@
 
 Each file is a standalone Ruby program. Run it independently rather than loading all examples into one Ruby process. Examples and reference outputs target the pinned CRuby version in `.ruby-version`.
 
-The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb), and [ordered definition storage](definition_store.rb), and [batch invoice totals](batch_totals.rb).
+The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb), and [ordered definition storage](definition_store.rb), [batch invoice totals](batch_totals.rb), and [user-method invoice batch traversal](yielding_batch.rb).
 
 ## Realistic workload corpus
 
 The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All seven run successfully on CRuby with the documented inputs; five currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after stage 11’s first checkpoint on 2026-10-08:
+Observed after stage 11’s yield checkpoint on 2026-10-08:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
 | [invoice.rb](workloads/invoice.rb) | Customer, one invoice line, rejected/accepted payment, quantity update through an alias | Matches CRuby | None on the supplied fixture | Multiple lines would need collections; no general billing or validation contract is claimed |
-| [shipping.rb](workloads/shipping.rb) | Standard/express pricing with an inherited constructor and overridden calculation | Matches CRuby | None on the supplied fixture | Built-in superclasses, blocks, and extended arguments remain outside the subset |
+| [shipping.rb](workloads/shipping.rb) | Standard/express pricing with an inherited constructor and overridden calculation | Matches CRuby | None on the supplied fixture | Built-in superclasses, block forwarding, and extended arguments remain outside the subset |
 | [log_summary.rb](workloads/log_summary.rb) | Read status lines until EOF and count successful/failed entries | `E_INTEGER_RANGE`, line 7 | Unbounded integer growth across loop iterations | Loops and `+=` now normalize; accepting this unchanged program still requires a sound range policy or Ruby-compatible large integers |
 | [shopping_cart.rb](workloads/shopping_cart.rb) | Store line-item objects and aggregate their subtotals | `E_UNSUPPORTED`, line 25 | `BlockArgumentNode` (`&:subtotal`) | Array storage/append now work; Literal each/map/times blocks and symbol literals now work; `Array#sum` and Symbol-to-Proc conversion still need supported-call contracts (stage 11) |
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |

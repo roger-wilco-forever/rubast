@@ -90,7 +90,8 @@ module Rubast
         def validate_dispatch(node, locals)
           case node
           when IR::Call then validate_call(node, locals)
-          when IR::BlockCall then validate_iterator(node, locals)
+          when IR::BlockCall then validate_block_call(node, locals)
+          when IR::Yield then validate_yield(node, locals)
           else validate_super(node, locals)
           end
         end
@@ -163,10 +164,11 @@ module Rubast
         def snapshot(locals)
           # ponytail: snapshot the arena; track reachable objects if large graphs make joins expensive.
           fields = @objects.to_h { |object| [object.object_id, [object, object.fields.dup]] }
-          { locals: locals.dup, fields: fields }
+          { locals: locals.dup, fields: fields, captures: capture_snapshot }
         end
 
         def restore(state, locals)
+          state.fetch(:captures).each { |scope, values| scope.replace(values) }
           locals.replace(state.fetch(:locals))
           state.fetch(:fields).each_value { |object, fields| object.fields.replace(fields) }
         end
@@ -174,6 +176,7 @@ module Rubast
         def merge_states(states, locals, origin)
           return if states.empty?
 
+          merge_captures(states, origin)
           merge_locals(states, locals, origin) if locals
           ids = states.flat_map { |state| state.fetch(:fields).keys }.uniq
           ids.each do |id|
@@ -259,6 +262,34 @@ module Rubast
       module Inheritance
         private
 
+        def validate_class(node)
+          register_class(node)
+          @checking_unused = true
+          object_count = @objects.length
+          @classes.fetch(node.name).each_value do |method|
+            parameters = method.parameters.to_h { |name| [name, :unknown] }
+            receiver = object_type(node.name, :unknown)
+            validate_method_body(method, parameters, receiver)
+          end
+          @objects.slice!(object_count..)
+          nil
+        ensure
+          @checking_unused = false
+        end
+
+        def register_class(node)
+          unsupported(node) if @classes.key?(node.name) || Object.const_defined?(node.name, false)
+          superclass = node.superclass&.name
+          unsupported(node.superclass) if superclass && !@classes.key?(superclass)
+          methods = {}
+          node.definitions.each do |method|
+            unsupported(method) if methods.key?(method.name)
+            methods[method.name] = method
+          end
+          @classes[node.name] = methods.freeze
+          @superclasses[node.name] = superclass
+        end
+
         def implicit_method?(node)
           node.receiver.nil? && @receiver_type && lookup_method(@receiver_type.class_name, node.name)
         end
@@ -310,17 +341,26 @@ module Rubast
           end
         end
 
-        def validate_method_body(method, parameters, receiver, origin = method, owner: receiver.class_name)
-          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context]
+        def validate_method_body(method, parameters, receiver, origin = method, **context)
+          owner = context.fetch(:owner, receiver.class_name)
+          saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
+                           @yield_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
+          @yield_context = context[:block]
           @receiver_type = receiver
           @method_context = [owner, method]
           @loop_context = nil
           @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           body = validate_expression(method.body, locals)
+          method_result(body, locals, origin)
+        ensure
+          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context, @yield_context = saved_context
+        end
+
+        def method_result(body, locals, origin)
           types = @return_exits.map(&:first)
           states = @return_exits.map(&:last)
           unless body.result_type == :never
@@ -329,8 +369,6 @@ module Rubast
           end
           merge_states(states, nil, origin)
           body.with(result_type: join_types(types, origin))
-        ensure
-          @receiver_type, @active_methods, @return_exits, @method_context, @loop_context = saved_context
         end
 
         def validate_method_call(node, locals)
@@ -388,12 +426,14 @@ module Rubast
         include Collections
         include Hashes
         include Iterators
+        include Blocks
 
         def call(program)
           @classes = {}
           @superclasses = {}
           @active_methods = []
           @objects = []
+          @captured_scopes = []
           locals = program.locals.to_h { |name| [name, :nil] }
           statements = program.statements.filter_map { |node| validate_statement(node, locals) }
           IR::Program.new(statements: statements.freeze, locals: program.locals, warnings: program.warnings)
@@ -416,31 +456,6 @@ module Rubast
           IR::Puts.new(value: validate_scalar(node.arguments.first, locals), span: node.span)
         end
 
-        def validate_class(node)
-          register_class(node)
-          object_count = @objects.length
-          @classes.fetch(node.name).each_value do |method|
-            parameters = method.parameters.to_h { |name| [name, :unknown] }
-            receiver = object_type(node.name, :unknown)
-            validate_method_body(method, parameters, receiver)
-          end
-          @objects.slice!(object_count..)
-          nil
-        end
-
-        def register_class(node)
-          unsupported(node) if @classes.key?(node.name) || Object.const_defined?(node.name, false)
-          superclass = node.superclass&.name
-          unsupported(node.superclass) if superclass && !@classes.key?(superclass)
-          methods = {}
-          node.definitions.each do |method|
-            unsupported(method) if methods.key?(method.name)
-            methods[method.name] = method
-          end
-          @classes[node.name] = methods.freeze
-          @superclasses[node.name] = superclass
-        end
-
         def validate_scalar(node, locals)
           value = validate_expression(node, locals)
           unsupported(node) if type_of(value, locals).is_a?(IR::ObjectType)
@@ -457,7 +472,7 @@ module Rubast
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
-          when IR::Call, IR::Super, IR::BlockCall then validate_dispatch(node, locals)
+          when IR::Call, IR::Super, IR::BlockCall, IR::Yield then validate_dispatch(node, locals)
           when IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite then validate_collection_expression(node, locals)
           else unsupported(node)
           end
@@ -537,7 +552,8 @@ module Rubast
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
-             IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator
+             IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator,
+             IR::Yield, IR::YieldInvoke, IR::BlockInvocation
           node.result_type
         end
       end

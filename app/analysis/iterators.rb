@@ -79,11 +79,8 @@ module Rubast
         unsupported(node) if call.name == :map && @loop_depth&.positive?
       end
 
-      def validate_iterator(node, locals)
-        check_iterator_call(node)
+      def validate_iterator_receiver(node, receiver, type, locals)
         call = node.call
-        receiver = validate_expression(call.receiver, locals)
-        type = type_of(receiver, locals)
         if type == :unknown
           check_detached_block(node.block, locals, summarize: true)
           return node.with(call: call.with(receiver: receiver), result_type: :unknown)
