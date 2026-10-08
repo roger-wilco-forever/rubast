@@ -2,13 +2,13 @@
 
 Each file is a standalone Ruby program. Run it independently rather than loading all examples into one Ruby process. Examples and reference outputs target the pinned CRuby version in `.ruby-version`.
 
-The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb), and [ordered definition storage](definition_store.rb), [batch invoice totals](batch_totals.rb), [user-method invoice batch traversal](yielding_batch.rb), and [first large invoice with an early block exit](first_large_invoice.rb).
+The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), and [shared arrays and mutable strings](shared_collections.rb), and [ordered definition storage](definition_store.rb), [batch invoice totals](batch_totals.rb), [user-method invoice batch traversal](yielding_batch.rb), [first large invoice with an early block exit](first_large_invoice.rb), and [invoice labels with block next values](invoice_labels.rb).
 
 ## Realistic workload corpus
 
 The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All seven run successfully on CRuby with the documented inputs; five currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after stage 11’s block-break checkpoint on 2026-10-08:
+Observed after stage 11’s block-next checkpoint on 2026-10-08:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |

@@ -366,14 +366,13 @@ Feature: Break from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 4
     And no Rust project was created
 
-  Scenario: Next from a block remains unsupported
+  Scenario: Next continues a times block
     Given the Ruby source is:
       """
       1.times { next 7 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Nonlocal returns from a block remain unsupported
     Given the Ruby source is:

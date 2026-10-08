@@ -344,7 +344,7 @@ module Rubast
         def validate_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
           saved_context = [@receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
-                           @yield_context, @block_exit_context]
+                           @yield_context, @block_exit_context, @block_next_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
@@ -353,13 +353,14 @@ module Rubast
           @method_context = [owner, method]
           @loop_context = nil
           @block_exit_context = nil
+          @block_next_context = nil
           @return_exits = []
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           body = validate_expression(method.body, locals)
           method_result(body, locals, origin)
         ensure
           @receiver_type, @active_methods, @return_exits, @method_context, @loop_context,
-            @yield_context, @block_exit_context = saved_context
+            @yield_context, @block_exit_context, @block_next_context = saved_context
         end
 
         def method_result(body, locals, origin)
@@ -558,7 +559,7 @@ module Rubast
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
              IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator,
-             IR::Yield, IR::YieldInvoke, IR::BlockInvocation
+             IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody
           node.result_type
         end
       end

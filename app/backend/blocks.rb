@@ -37,6 +37,12 @@ module Rubast
         @locals, @receiver, @return_label, @loop_labels, @block_context = saved if saved
       end
 
+      def emit_block_body(node, lines)
+        statements = []
+        statements << "    #{emit_expression(node.body, statements)}"
+        emit_value("'block_exit_#{node.exit_id}: {\n#{statements.join("\n")}\n    }", lines)
+      end
+
       def inline_locals(names, parameters, lines, capture: false)
         @locals = {} unless capture
         prefix = "inline_#{@next_temp}"

@@ -15,6 +15,7 @@ module Rubast
     Conditional = Data.define(:predicate, :consequent, :alternative, :result_type, :span)
     Return = Data.define(:value, :span)
     Loop = Data.define(:predicate, :body, :until_loop, :post_test, :result_type, :span)
+    BlockBody = Data.define(:exit_id, :body, :result_type, :span)
     BlockExit = Data.define(:target, :value, :span)
     LoopExit = Data.define(:kind, :value, :span)
     NilLiteral = Data.define(:span)

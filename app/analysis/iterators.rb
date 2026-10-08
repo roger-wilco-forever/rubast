@@ -17,15 +17,38 @@ module Rubast
           @loop_depth = (@loop_depth || 0) + 1
           @iterator_steps = (@iterator_steps || 0) + 1
           unsupported(block) if @iterator_steps > MAX_STEPS
-          scope = locals.merge(block.locals.to_h { |name| [name, :nil] })
-          block.parameters.each { |name| scope[name] = value_type }
-          body = validate_expression(block.body, scope)
+          body = validate_iterator_body(block, value_type, locals)
           check_block_fallthrough(block, body, exit_count)
-          locals.each_key { |name| locals[name] = scope.fetch(name) }
           body
         ensure
           @loop_depth -= 1
           @loop_context, @block_exit_context = saved_context
+        end
+
+        def validate_iterator_body(block, value_type, locals)
+          scope = locals.merge(block.locals.to_h { |name| [name, :nil] })
+          block.parameters.each { |name| scope[name] = value_type }
+          context = new_block_context(block, scope)
+          body = with_block_next_context(context) do
+            value = validate_expression(block.body, scope)
+            complete_block_body(value, context, scope, block)
+          end
+          locals.each_key { |name| locals[name] = scope.fetch(name) }
+          body
+        end
+
+        def complete_block_body(body, context, locals, origin)
+          return body unless context[:used]
+
+          types = context.fetch(:exits).map(&:first)
+          states = context.fetch(:exits).map(&:last)
+          unless body.result_type == :never
+            types << body.result_type
+            states << snapshot(locals)
+          end
+          merge_states(states, locals, origin)
+          IR::BlockBody.new(exit_id: context.fetch(:id), body: body,
+                            result_type: join_types(types, origin), span: origin.span)
         end
 
         def check_block_fallthrough(block, body, exit_count)

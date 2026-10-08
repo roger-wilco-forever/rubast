@@ -294,15 +294,14 @@ Feature: Yield to literal blocks in user instance methods
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: Block next remains unsupported
+  Scenario: Block next returns its value to yield
     Given the Ruby source is:
       """
       class Producer; def run; yield; end; end
       Producer.new.run { next 1 }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 2
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Fresh arrays in a yielded body remain unsupported
     Given the Ruby source is:

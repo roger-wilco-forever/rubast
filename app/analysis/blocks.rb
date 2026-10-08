@@ -21,6 +21,16 @@ module Rubast
           @block_exit_context = saved
         end
 
+        def with_block_next_context(context)
+          saved = @block_next_context
+          @block_exit_contexts << context
+          @block_next_context = context
+          yield
+        ensure
+          @block_exit_contexts.pop
+          @block_next_context = saved
+        end
+
         def block_exit_lists
           @block_exit_contexts.map { |context| context.fetch(:exits) }
         end
@@ -34,12 +44,24 @@ module Rubast
         end
 
         def validate_block_exit(node, locals)
+          return validate_block_next(node, locals) if node.kind == :next
+
           unsupported(node) unless node.kind == :break && @block_exit_context
           value = validate_expression(node.value, locals)
           type = type_of(value, locals)
           check_exiting_traversals(node)
           @block_exit_context.fetch(:exits) << [type, block_exit_state(locals)] unless type == :never
           IR::BlockExit.new(target: @block_exit_context.fetch(:id), value: value, span: node.span)
+        end
+
+        def validate_block_next(node, locals)
+          unsupported(node) unless @block_next_context
+          @block_next_context[:used] = true
+          value = validate_expression(node.value, locals)
+          type = type_of(value, locals)
+          check_exiting_traversals(node)
+          @block_next_context.fetch(:exits) << [type, snapshot(locals)] unless type == :never
+          IR::BlockExit.new(target: @block_next_context.fetch(:id), value: value, span: node.span)
         end
 
         def check_exiting_traversals(node)

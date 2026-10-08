@@ -92,7 +92,7 @@ module Rubast
           case node
           when IR::Puts, IR::Sequence then emit_body(node, lines)
           when IR::Conditional then emit_conditional(node, lines)
-          when IR::Loop, IR::LoopExit, IR::BlockExit then emit_loop_flow(node, lines)
+          when IR::Loop, IR::LoopExit, IR::BlockExit, IR::BlockBody then emit_loop_flow(node, lines)
           when IR::Return then emit_return(node, lines)
           when IR::Operation
             operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
@@ -130,6 +130,8 @@ module Rubast
         private
 
         def emit_loop_flow(node, lines)
+          return emit_block_body(node, lines) if node.is_a?(IR::BlockBody)
+
           return emit_loop(node, lines) if node.is_a?(IR::Loop)
           if node.is_a?(IR::BlockExit)
             return "{ break 'block_exit_#{node.target} #{emit_expression(node.value, lines)}; }"
@@ -252,7 +254,8 @@ module Rubast
           when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::Builtin, IR::Iterator,
                IR::BlockInvocation, IR::YieldInvoke
             emit_allocation_or_call(node, lines)
-          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit, IR::BlockExit
+          when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit, IR::BlockExit,
+               IR::BlockBody
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
