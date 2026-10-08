@@ -319,7 +319,6 @@ Feature: Preserve loop timing, state, and control values
       | while true; next 1, 2; end                                                                             | E_UNSUPPORTED   |
       | while gets; redo; end                                                                                  | E_UNSUPPORTED   |
       | while (if gets; break; end); end                                                                       | E_UNSUPPORTED   |
-      | begin; puts 1; rescue; puts 2; end while false                                                          | E_UNSUPPORTED   |
 
   Scenario: Recheck a method's field types on later iterations
     Given the Ruby source is:
@@ -341,3 +340,11 @@ Feature: Preserve loop timing, state, and control values
     When I emit a Rust project
     Then the diagnostic has code "E_UNSUPPORTED" at line 6
     And no Rust project was created
+
+  Scenario: Execute begin puts 1 rescue puts 2 end while false against CRuby
+    Given the Ruby source is:
+      """
+      begin; puts 1; rescue; puts 2; end while false
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

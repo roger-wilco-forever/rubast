@@ -313,16 +313,15 @@ Feature: Next from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
     And no Rust project was created
 
-  Scenario: Possible captured zero values on next paths cannot bypass division checks
+  Scenario: Captured zero on a next path raises a runtime division error
     Given the Ruby source is:
       """
       total = 5
       2.times { |value| if value == 1; total = 0; next 7; end; total = 5 }
       puts 30 / total
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Growing traversed arrays stays unsupported on next paths
     Given the Ruby source is:

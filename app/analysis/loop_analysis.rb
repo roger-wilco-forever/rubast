@@ -47,7 +47,7 @@ module Rubast
           unsupported(node) unless @loop_context && !@loop_context.fetch(:predicate)
           value = validate_expression(node.value, locals)
           type = type_of(value, locals)
-          @loop_context.fetch(node.kind) << [type, snapshot(locals)] unless type == :never
+          @loop_context.fetch(node.kind) << [type, exit_snapshot(locals)] unless type == :never
           node.with(value: value)
         end
       end

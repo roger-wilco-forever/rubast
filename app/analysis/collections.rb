@@ -71,7 +71,8 @@ module Rubast
           index = types.fetch(0)
           unsupported(origin) unless index.is_a?(IR::IntegerType) && index.minimum == index.maximum
           slot = index.minimum.negative? ? length + index.minimum : index.minimum
-          unsupported(origin) if slot.negative?
+          return :never if slot.negative?
+
           set_array_length(array, [length, slot + 1].max, origin)
           (length...slot).each { |gap| array.fields[gap] = :nil }
           array.fields[slot] = types.fetch(1)
@@ -153,8 +154,23 @@ module Rubast
                  else
                    collection_result(node, family, type, types)
                  end
+        record_collection_errors(node, type, types, result, locals)
         IR::Builtin.new(family: family, name: node.name, receiver: receiver, arguments: arguments,
                         result_type: result, span: node.span)
+      end
+
+      def record_collection_errors(node, type, types, result, locals)
+        return if types.value?(:never)
+
+        if frozen_mutation?(node, type)
+          record_exception(:FrozenError, locals, node)
+        elsif array_type?(type) && node.name == :[]= && result == :never && !types.value?(:never)
+          record_exception(:IndexError, locals, node)
+        end
+      end
+
+      def frozen_mutation?(node, type)
+        STRING_WRITES.include?(node.name) && members(type).include?(:frozen_string)
       end
 
       def collection_family(type)
@@ -173,7 +189,8 @@ module Rubast
 
       def string_result(node, receiver_type, types)
         unsupported(node) unless types.values.all? { |type| type == :unknown || string_type?(type) }
-        unsupported(node) if STRING_WRITES.include?(node.name) && members(receiver_type).include?(:frozen_string)
+        return :never if STRING_WRITES.include?(node.name) && members(receiver_type) == [:frozen_string]
+
         case node.name
         when :length, :bytesize then integer_type(0, Validator::MAX_INTEGER, node)
         when :chomp! then :string_or_nil

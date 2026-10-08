@@ -449,7 +449,7 @@ Feature: Nonlocal return from literal blocks
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
 
-  Scenario: A captured zero on a callee return path cannot bypass division checks
+  Scenario: A possible captured zero uses runtime division checks
     Given the Ruby source is:
       """
       class Producer
@@ -463,9 +463,8 @@ Feature: Nonlocal return from literal blocks
       Producer.new.run(gets) { |value| total = value }
       puts 30 / total
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 10
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Return snapshots exclude intervening block parameters and callee captures
     Given the Ruby source is:

@@ -18,10 +18,10 @@ The CLI supports `run` and `emit-rust FILE -o DIR`. Use `emit-rust` to retain a 
 | --- | --- |
 | CLI and error presentation | [`bin/rubast`](../bin/rubast), [`lib/rubast/compilation_error.rb`](../lib/rubast/compilation_error.rb) |
 | Source bytes and Prism parse errors | [`app/source/reader.rb`](../app/source/reader.rb), [`app/frontend/parser.rb`](../app/frontend/parser.rb) |
-| Prism syntax to IR | [`app/frontend/normalizer.rb`](../app/frontend/normalizer.rb), [`app/frontend/block_scopes.rb`](../app/frontend/block_scopes.rb), [`lib/rubast/ir.rb`](../lib/rubast/ir.rb) |
-| Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`app/analysis/loop_analysis.rb`](../app/analysis/loop_analysis.rb), [`app/analysis/collections.rb`](../app/analysis/collections.rb), [`app/analysis/hashes.rb`](../app/analysis/hashes.rb), [`app/analysis/iterators.rb`](../app/analysis/iterators.rb), [`app/analysis/blocks.rb`](../app/analysis/blocks.rb) |
-| Generated Rust and Cargo manifest | [`app/backend/rust.rb`](../app/backend/rust.rb), [`app/backend/iterators.rb`](../app/backend/iterators.rb), [`app/backend/blocks.rb`](../app/backend/blocks.rb), [`lib/rubast/generated_project.rb`](../lib/rubast/generated_project.rb) |
-| Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs) |
+| Prism syntax to IR | [`app/frontend/normalizer.rb`](../app/frontend/normalizer.rb), [`app/frontend/block_scopes.rb`](../app/frontend/block_scopes.rb), [`app/frontend/exceptions.rb`](../app/frontend/exceptions.rb), [`lib/rubast/ir.rb`](../lib/rubast/ir.rb) |
+| Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`app/analysis/loop_analysis.rb`](../app/analysis/loop_analysis.rb), [`app/analysis/collections.rb`](../app/analysis/collections.rb), [`app/analysis/hashes.rb`](../app/analysis/hashes.rb), [`app/analysis/iterators.rb`](../app/analysis/iterators.rb), [`app/analysis/blocks.rb`](../app/analysis/blocks.rb), [`app/analysis/exceptions.rb`](../app/analysis/exceptions.rb) |
+| Generated Rust and Cargo manifest | [`app/backend/rust.rb`](../app/backend/rust.rb), [`app/backend/iterators.rb`](../app/backend/iterators.rb), [`app/backend/blocks.rb`](../app/backend/blocks.rb), [`app/backend/exceptions.rb`](../app/backend/exceptions.rb), [`lib/rubast/generated_project.rb`](../lib/rubast/generated_project.rb) |
+| Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs), [`runtime/rubast_runtime/src/exceptions.rs`](../runtime/rubast_runtime/src/exceptions.rs) |
 | Project files and runtime copying | [`app/build/writer.rb`](../app/build/writer.rb) |
 | Cargo execution | [`app/build/cargo.rb`](../app/build/cargo.rb) |
 | Stage wiring | [`app/compiler.rb`](../app/compiler.rb), [`system/container.rb`](../system/container.rb) |

@@ -43,6 +43,8 @@ module Rubast
       end
 
       def normalize_block_body(node, source)
+        return normalize_begin(node.body, source) if node.body.is_a?(Prism::BeginNode)
+
         unsupported(node.body, source) if node.body && !node.body.is_a?(Prism::StatementsNode)
         normalize_sequence(node.body, node, source)
       end

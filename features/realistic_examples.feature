@@ -93,12 +93,10 @@ Feature: Track realistic programs and their current compiler blockers
       true
       """
 
-  @unsupported_examples
-  Scenario: Guarded unit pricing needs predicate narrowing
+  Scenario: Guarded unit pricing executes with runtime division checks
     Given I use the example "workloads/unit_pricing.rb"
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 11
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
     And CRuby prints the reference output:
       """
       3333

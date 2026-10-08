@@ -310,7 +310,6 @@ Feature: Share array storage and mutable UTF-8 strings
 
     Examples:
       | source                                                                                              |
-      | values = []; values[-1] = 1                                                                        |
       | values = []; values[10000] = 1                                                                     |
       | values = []; values["key"]                                                                        |
       | values = [1]; values[0, 1]                                                                         |
@@ -340,16 +339,15 @@ Feature: Share array storage and mutable UTF-8 strings
     Then the diagnostic has code "E_UNSUPPORTED" at line 3
     And no Rust project was created
 
-  Scenario Outline: Reject mutations of known frozen literals before emission
+  Scenario Outline: Frozen mutations raise Ruby errors at runtime
     Given the Ruby source is:
       """
       # frozen_string_literal: true
       text = "Ada"
       <operation>
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
     Examples:
       | operation               |
@@ -371,6 +369,14 @@ Feature: Share array storage and mutable UTF-8 strings
     Given the Ruby source is:
       """
       values = [1]; values.each { puts 1 }
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Execute values = [] values[-1] = 1 against CRuby
+    Given the Ruby source is:
+      """
+      values = []; values[-1] = 1
       """
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby

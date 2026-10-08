@@ -16,7 +16,8 @@ module Rubast
       def call(program)
         functions = {}
         main = Emitter.new(functions).call(program)
-        source = ["use rubast_runtime::{Runtime, Value};", "", *functions.values.map(&:last), main].join("\n")
+        source = ["use rubast_runtime::{Runtime, Value, Flow, Outcome, Location};", "", *functions.values.map(&:last),
+                  main].join("\n")
         GeneratedProject.new(files: { "Cargo.toml" => MANIFEST, "src/main.rs" => source }.freeze)
       end
 
@@ -68,7 +69,9 @@ module Rubast
         when IR::BooleanLiteral then "Value::Bool(#{node.value})"
         when IR::NilLiteral then "Value::Nil"
         when IR::IntegerLiteral then "Value::Integer(#{node.value})"
-        when IR::StringLiteral then "Value::from(#{rust_string(node.value)}.to_owned())"
+        when IR::StringLiteral
+          text = "#{rust_string(node.value)}.to_owned()"
+          node.frozen ? "Value::frozen(#{text}, #{rust_string(node.value.inspect)})" : "Value::from(#{text})"
         when IR::SymbolLiteral then "Value::Symbol(#{rust_string(node.value)})"
         end
       end
@@ -94,17 +97,24 @@ module Rubast
           when IR::Conditional then emit_conditional(node, lines)
           when IR::Loop, IR::LoopExit, IR::BlockExit, IR::BlockBody then emit_loop_flow(node, lines)
           when IR::Return then emit_return(node, lines)
-          when IR::Operation
-            operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
-            name = Rust.rust_string(node.name.to_s)
-            function = operands.one? ? "unary" : "binary"
-            emit_value("Runtime::#{function}(#{name}, #{operands.join(', ')})", lines)
+          else node.is_a?(IR::Operation) ? emit_operation(node, lines) : emit_exception(node, lines)
           end
         end
 
+        def emit_operation(node, lines)
+          operands = node.operands.map { |operand| emit_value(emit_expression(operand, lines), lines) }
+          name = Rust.rust_string(node.name.to_s)
+          function = operands.one? ? "unary" : "binary"
+          expression = if operands.one?
+                         "Runtime::#{function}(#{name}, #{operands.join(', ')})"
+                       else
+                         "runtime.checked_binary(#{name}, #{operands.join(', ')}, #{location(node.span)})?"
+                       end
+          emit_value(expression, lines)
+        end
+
         def emit_return(node, lines)
-          target = @return_label ? "break '#{@return_label}" : "return"
-          "{ #{target} #{emit_expression(node.value, lines)}; }"
+          emit_jump(@return_label || "return", emit_expression(node.value, lines))
         end
 
         def emit_conditional(node, lines)
@@ -133,15 +143,13 @@ module Rubast
           return emit_block_body(node, lines) if node.is_a?(IR::BlockBody)
 
           return emit_loop(node, lines) if node.is_a?(IR::Loop)
-          if node.is_a?(IR::BlockExit)
-            return "{ break 'block_exit_#{node.target} #{emit_expression(node.value, lines)}; }"
-          end
+          return emit_jump("block_exit_#{node.target}", emit_expression(node.value, lines)) if node.is_a?(IR::BlockExit)
 
           value = emit_expression(node.value, lines)
           if node.kind == :break
-            "{ break '#{@loop_labels.first} #{value}; }"
+            emit_jump(@loop_labels.first, value)
           else
-            "{ let _ = #{value}; break '#{@loop_labels.last}; }"
+            emit_jump(@loop_labels.last, value)
           end
         end
 
@@ -149,18 +157,22 @@ module Rubast
           previous = @loop_labels
           @loop_labels = ["loop_#{@next_temp}", "iteration_#{@next_temp}"]
           @next_temp += 1
+          @targets[@loop_labels.first] = [@closure_depth, :value]
           predicate = []
           condition = emit_expression(node.predicate, predicate)
           test = "Runtime::truthy(&#{condition})"
           test = "!#{test}" unless node.until_loop
           predicate << "    if #{test} { break '#{@loop_labels.first} Value::Nil; }"
+          @targets[@loop_labels.last] = [@closure_depth, :next]
           body = []
           body << "    let _ = #{emit_expression(node.body, body)};"
+          @targets.delete(@loop_labels.last)
           iteration = "    '#{@loop_labels.last}: {\n#{body.join("\n")}\n    };"
           parts = node.post_test ? [iteration, *predicate] : [*predicate, iteration]
           expression = "'#{@loop_labels.first}: loop {\n#{parts.join("\n")}\n    }"
           emit_value(expression, lines)
         ensure
+          @loop_labels&.each { |label| @targets.delete(label) }
           @loop_labels = previous
         end
       end
@@ -186,8 +198,14 @@ module Rubast
           receiver = emit_value(emit_expression(node.receiver, lines), lines)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
           inputs = "#{Rust.rust_string(node.name.to_s)}, #{receiver}, vec![#{arguments.join(', ')}]"
-          target = node.family == :string ? "Runtime::string_operation" : "runtime.#{node.family}_operation"
-          emit_value("#{target}(#{inputs})", lines)
+          return emit_value("Runtime::exception_message(#{receiver})", lines) if node.family == :exception
+
+          expression = if %i[array string].include?(node.family)
+                         "runtime.checked_#{node.family}(#{inputs}, #{location(node.span)})?"
+                       else
+                         "runtime.#{node.family}_operation(#{inputs})"
+                       end
+          emit_value(expression, lines)
         end
 
         def emit_container(node, lines)
@@ -199,34 +217,71 @@ module Rubast
         end
       end
 
+      module Objects
+        private
+
+        def emit_object(node, lines)
+          receiver = emit_value(emit_expression(node.receiver, lines), lines) if node.is_a?(IR::MethodCall)
+          arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
+          receiver ||= emit_value("runtime.new_object()", lines)
+          return "#{receiver}.clone()" if empty_constructor?(node)
+
+          function = Rust.function(node, @functions)
+          inputs = ["runtime", "#{receiver}.clone()", *arguments]
+          frames = [location(node.span)]
+          frames << location(node.span, "Class#new") if node.is_a?(IR::NewObject)
+          result = traced_result(frames, lines) { "#{function}(#{inputs.join(', ')})?" }
+          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
+        end
+
+        def empty_constructor?(node)
+          node.is_a?(IR::NewObject) && node.body.is_a?(IR::Sequence) && node.body.expressions.empty?
+        end
+
+        def emit_interpolation(node, lines)
+          parts = node.parts.map { |part| emit_expression(part, lines) }
+          "Runtime::interpolate(vec![#{parts.join(', ')}])"
+        end
+      end
+
       class Emitter
         include ControlFlow
         include Loops
         include Collections
         include Iterators
         include Blocks
+        include Exceptions
+        include Objects
 
         def initialize(functions)
           @functions = functions
           @locals = {}
           @next_temp = 0
+          @closure_depth = 0
+          @targets = {}
+          @frame_name = "<main>"
+          @block_depth = 0
         end
 
         def call(program)
-          lines = ["fn main() {", "    let runtime = &mut Runtime::new();"]
+          lines = ["fn program(runtime: &mut Runtime) -> Outcome {"]
           program.warnings.each { |warning| lines << "    eprintln!(\"{}\", #{Rust.rust_string(warning)});" }
           initialize_locals(program.locals, {}, lines)
           program.statements.each { |statement| emit_statement(statement, lines) }
-          lines.push("}", "").join("\n")
+          lines.push("    Ok(Value::Nil)", "}", "fn main() { Runtime::finish(program(&mut Runtime::new())); }",
+                     "").join("\n")
         end
 
         def method(node, name)
           parameters = node.parameters.each_with_index.to_h { |parameter, index| [parameter, "arg_#{index}"] }
           @receiver = "receiver"
+          @frame_name = "#{node.class_name}##{node.is_a?(IR::NewObject) ? :initialize : node.name}"
+          @targets["return"] = [0, :return]
           signature = ["runtime: &mut Runtime", "receiver: Value", *parameters.values.map { |arg| "#{arg}: Value" }]
-          lines = ["fn #{name}(#{signature.join(', ')}) -> Value {"]
+          lines = ["fn #{name}(#{signature.join(', ')}) -> Outcome {"]
           initialize_locals(node.locals, parameters, lines)
-          lines << "    #{emit_expression(node.body, lines)}"
+          value = emit_expression(node.body, lines)
+          lines << "    Ok(#{value})"
           lines.push("}", "").join("\n")
         end
 
@@ -255,7 +310,7 @@ module Rubast
                IR::BlockInvocation, IR::YieldInvoke
             emit_allocation_or_call(node, lines)
           when IR::Puts, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::Loop, IR::LoopExit, IR::BlockExit,
-               IR::BlockBody
+               IR::BlockBody, IR::Protected, IR::Raise, IR::Retry, IR::ExceptionValue
             emit_flow(node, lines)
           else raise ArgumentError, "unsupported semantic expression: #{node.class}"
           end
@@ -289,23 +344,6 @@ module Rubast
             node.expressions[0...-1].each { |expression| emit_statement(expression, lines) }
             node.expressions.empty? ? "Value::Nil" : emit_expression(node.expressions.last, lines)
           end
-        end
-
-        def emit_object(node, lines)
-          receiver = emit_value(emit_expression(node.receiver, lines), lines) if node.is_a?(IR::MethodCall)
-          arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
-          receiver ||= emit_value("runtime.new_object()", lines)
-          return "#{receiver}.clone()" if node.is_a?(IR::NewObject) && node.body.expressions.empty?
-
-          function = Rust.function(node, @functions)
-          inputs = ["runtime", "#{receiver}.clone()", *arguments]
-          result = emit_value("#{function}(#{inputs.join(', ')})", lines)
-          node.is_a?(IR::NewObject) ? "#{receiver}.clone()" : result
-        end
-
-        def emit_interpolation(node, lines)
-          parts = node.parts.map { |part| emit_expression(part, lines) }
-          "Runtime::interpolate(vec![#{parts.join(', ')}])"
         end
       end
     end

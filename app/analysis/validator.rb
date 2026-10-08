@@ -103,7 +103,17 @@ module Rubast
           operands = [receiver, *arguments]
           operand_types = [receiver_type, *types.values]
           result_type = operation_type(node, operand_types)
+          record_division_error(node, operand_types, locals)
           IR::Operation.new(name: node.name, operands: operands.freeze, result_type: result_type, span: node.span)
+        end
+
+        def record_division_error(node, types, locals)
+          return unless %i[/ %].include?(node.name) && types.last.is_a?(IR::IntegerType)
+
+          divisor = types.last
+          return unless (divisor.minimum..divisor.maximum).cover?(0) && !types.include?(:never)
+
+          record_exception(:ZeroDivisionError, locals, node)
         end
 
         def operation_type(node, types)
@@ -137,10 +147,21 @@ module Rubast
             bounds = node.name == :-@ ? [-left.last, -left.first] : left
           else
             right = [types.last.minimum, types.last.maximum]
-            unsupported(node) if %i[/ %].include?(node.name) && (right.first..right.last).cover?(0)
+            if %i[/ %].include?(node.name) && (right.first..right.last).cover?(0)
+              return zero_divisor_type(node, left, right)
+            end
+
             bounds = arithmetic_bounds(node.name, left, right)
           end
           integer_type(bounds.min, bounds.max, node)
+        end
+
+        def zero_divisor_type(node, left, right)
+          return :never if right == [0, 0]
+
+          ranges = [[right.first, -1], [1, right.last]].select { |first, last| first <= last }
+          values = ranges.flat_map { |range| arithmetic_bounds(node.name, left, range) }
+          integer_type(values.min, values.max, node)
         end
 
         def arithmetic_bounds(name, left, right)
@@ -210,6 +231,8 @@ module Rubast
           when IR::Loop then validate_loop(node, locals)
           when IR::LoopExit then validate_loop_exit(node, locals)
           when IR::Return then validate_return(node, locals)
+          when IR::Protected then validate_protected(node, locals)
+          when IR::Retry then validate_retry(node, locals)
           end
         end
 
@@ -244,6 +267,8 @@ module Rubast
         end
 
         def validate_conditional(node, locals)
+          return validate_retry_conditional(node, locals) if @retry_narrowing
+
           # ponytail: join both branches; add predicate narrowing when safe programs need it.
           predicate = validate_scalar(node.predicate, locals)
           before = snapshot(locals)
@@ -270,12 +295,14 @@ module Rubast
           register_class(node)
           @checking_unused = true
           object_count = @objects.length
+          exit_counts = flow_exit_counts
           @classes.fetch(node.name).each_value do |method|
             parameters = method.parameters.to_h { |name| [name, :unknown] }
             receiver = object_type(node.name, :unknown)
             validate_method_body(method, parameters, receiver)
           end
           @objects.slice!(object_count..)
+          restore_flow_exits(exit_counts)
           nil
         ensure
           @checking_unused = false
@@ -348,7 +375,7 @@ module Rubast
         def validate_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
           saved_context = [@receiver_type, @active_methods, @method_context, @loop_context,
-                           @yield_context, @block_exit_context, @block_next_context]
+                           @yield_context, @block_exit_context, @block_next_context, @retry_context]
           key = [receiver.class_name, owner, method.name]
           unsupported(origin) if @active_methods.include?(key)
           @active_methods += [key]
@@ -358,6 +385,7 @@ module Rubast
           @loop_context = nil
           @block_exit_context = nil
           @block_next_context = nil
+          @retry_context = nil
           locals = method.locals.to_h { |name| [name, :nil] }.merge(parameters)
           with_return_context(locals) do
             body = validate_expression(method.body, locals)
@@ -365,7 +393,7 @@ module Rubast
           end
         ensure
           @receiver_type, @active_methods, @method_context, @loop_context,
-            @yield_context, @block_exit_context, @block_next_context = saved_context
+            @yield_context, @block_exit_context, @block_next_context, @retry_context = saved_context
         end
 
         def method_result(body, locals, origin)
@@ -384,6 +412,7 @@ module Rubast
           receiver = validate_expression(node.receiver || IR::SelfRead.new(result_type: nil, span: node.span), locals)
           type = type_of(receiver, locals)
           return defer_call(node, receiver, locals) if type == :unknown
+          return validate_exception_call(node, receiver, type, locals) if type.is_a?(IR::ExceptionType)
           return validate_collection_call(node, receiver, type, locals) if collection_call?(node, type)
           return validate_operation(node, receiver, type, locals) unless type.is_a?(IR::ObjectType)
 
@@ -436,6 +465,7 @@ module Rubast
         include Hashes
         include Iterators
         include Blocks
+        include Exceptions
 
         def call(program)
           @classes = {}
@@ -445,7 +475,10 @@ module Rubast
           @captured_scopes = []
           @block_exit_contexts = []
           @next_block_exit = 0
+          @ensure_contexts = []
           locals = program.locals.to_h { |name| [name, :nil] }
+          @exception_context = exception_context(locals)
+          @block_exit_contexts << @exception_context
           statements = program.statements.filter_map { |node| validate_statement(node, locals) }
           IR::Program.new(statements: statements.freeze, locals: program.locals, warnings: program.warnings)
         end
@@ -479,7 +512,8 @@ module Rubast
             validate_literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
-          when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit then validate_flow(node, locals)
+          when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit, IR::Protected, IR::Retry
+            validate_flow(node, locals)
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_scalar(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
@@ -491,7 +525,7 @@ module Rubast
 
         def validate_call(node, locals)
           return validate_method_call(node, locals) if implicit_method?(node)
-          return validate_puts(node, locals) if node.receiver.nil? && node.name == :puts
+          return validate_kernel_call(node, locals) if node.receiver.nil? && %i[puts raise fail].include?(node.name)
           return IR::GetLine.new(span: node.span) if gets_call?(node)
           return validate_safe_chomp(node, locals) if safe_chomp_call?(node)
           return validate_new(node, locals) if node.receiver.is_a?(IR::ConstantRead)
@@ -500,15 +534,21 @@ module Rubast
           unsupported(node)
         end
 
+        def validate_kernel_call(node, locals)
+          node.name == :puts ? validate_puts(node, locals) : validate_raise(node, locals)
+        end
+
         def validate_new(node, locals)
+          return validate_exception_new(node, locals) if exception_class?(node.receiver.name)
+
           unsupported(node) if @loop_depth&.positive?
           name = node.receiver.name
           unsupported(node) unless @classes.key?(name) && node.name == :new && !node.safe_navigation
           type = object_type(name, :nil)
           owner, method = lookup_method(name, :initialize)
           invocation = validate_invocation(node, method, locals, type, owner: owner)
-          IR::NewObject.new(class_name: name, **invocation,
-                            result_type: invocation.fetch(:body).result_type == :never ? :never : type, span: node.span)
+          IR::NewObject.new(class_name: owner || name, **invocation,
+                            result_type: continuing_type(invocation.fetch(:body), locals, type), span: node.span)
         end
 
         def validate_safe_chomp(node, locals)
@@ -558,13 +598,13 @@ module Rubast
         case node
         when IR::NilLiteral, IR::IntegerLiteral, IR::BooleanLiteral, IR::StringLiteral, IR::SymbolLiteral
           literal_type(node)
-        when IR::LoopExit, IR::BlockExit then :never
+        when IR::LoopExit, IR::BlockExit, IR::Retry then :never
         when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
              IR::Loop, IR::ArrayLiteral, IR::HashLiteral, IR::IndexWrite, IR::Builtin, IR::BlockCall, IR::Iterator,
-             IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody
+             IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise, IR::ExceptionValue
           node.result_type
         end
       end

@@ -325,8 +325,15 @@ Feature: Preserve conditional values and method returns
       | class Choice; def pick; return 42; unknown; end; end                                | E_UNSUPPORTED   |
       | if false; unknown; else; puts 42; end                                               | E_UNSUPPORTED   |
       | value = if true; "Ada"; else; 42; end; puts value&.chomp                            | E_UNSUPPORTED   |
-      | value = if true; 1; else; 0; end; puts 42 / value                                   | E_UNSUPPORTED   |
       | value = if true; 9223372036854775807; else; 0; end; puts value + 1                  | E_INTEGER_RANGE |
       | class Cell; def value; 42; end; end; cell = Cell.new; if true; cell = Cell.new; end | E_UNSUPPORTED   |
       | if true; puts 42; else; puts 2.5; end                                               | E_UNSUPPORTED   |
       | class Cell; def value; 42; end; end; if Cell.new; puts 42; end                      | E_UNSUPPORTED   |
+
+  Scenario: Execute value = if true 1 else 0 end puts 42 / value against CRuby
+    Given the Ruby source is:
+      """
+      value = if true; 1; else; 0; end; puts 42 / value
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby

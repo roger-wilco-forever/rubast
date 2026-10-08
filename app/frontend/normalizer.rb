@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "error_highlight"
+
 module Rubast
   module Frontend
     class Normalizer
@@ -28,7 +30,7 @@ module Rubast
           when Prism::ReturnNode then normalize_return(node, source)
           when Prism::WhileNode, Prism::UntilNode then normalize_loop(node, source)
           when Prism::BreakNode, Prism::NextNode then normalize_loop_exit(node, source)
-          when Prism::BeginNode then normalize_begin(node, source)
+          when Prism::BeginNode, Prism::RetryNode, Prism::RescueModifierNode then normalize_exception(node, source)
           end
         end
 
@@ -42,11 +44,6 @@ module Rubast
         def normalize_loop_exit(node, source)
           value = normalize_control_value(node, source)
           IR::LoopExit.new(kind: node.is_a?(Prism::BreakNode) ? :break : :next, value: value, span: span(node, source))
-        end
-
-        def normalize_begin(node, source)
-          unsupported(node, source) if node.rescue_clause || node.else_clause || node.ensure_clause
-          normalize_sequence(node.statements, node, source)
         end
 
         def normalize_return(node, source)
@@ -199,6 +196,7 @@ module Rubast
         end
       end
 
+      include Exceptions
       include BlockScopes
       include Expressions
       include Literals
@@ -230,7 +228,8 @@ module Rubast
             span: span(node, source)
           )
         when Prism::IfNode, Prism::UnlessNode, Prism::ParenthesesNode, Prism::ReturnNode, Prism::EmbeddedStatementsNode,
-             Prism::WhileNode, Prism::UntilNode, Prism::BreakNode, Prism::NextNode, Prism::BeginNode
+             Prism::WhileNode, Prism::UntilNode, Prism::BreakNode, Prism::NextNode, Prism::BeginNode,
+             Prism::RetryNode, Prism::RescueModifierNode
           normalize_flow(node, source)
         when Prism::CallNode, Prism::SuperNode, Prism::ForwardingSuperNode, Prism::YieldNode
           normalize_invocation(node, source)
@@ -257,6 +256,8 @@ module Rubast
       end
 
       def normalize_method_body(node, source)
+        return in_scope(node.locals) { normalize_begin(node.body, source) } if node.body.is_a?(Prism::BeginNode)
+
         unsupported(node.body, source) if node.body && !node.body.is_a?(Prism::StatementsNode)
         in_scope(node.locals) { normalize_sequence(node.body, node, source) }
       end
@@ -280,9 +281,16 @@ module Rubast
         )
       end
 
+      def argument_highlight(node)
+        return "" unless node.is_a?(Prism::CallNode)
+
+        spot = ErrorHighlight.spot(node, point_type: :args)
+        spot ? ErrorHighlight.formatter.message_for(spot) : ""
+      end
+
       def span(node, source)
         Span.new(path: source.path, line: node.location.start_line,
-                 column: node.location.start_column + 1)
+                 column: node.location.start_column + 1, highlight: argument_highlight(node))
       end
     end
   end

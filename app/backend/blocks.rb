@@ -10,37 +10,64 @@ module Rubast
         method = node.invocation
         receiver = emit_value(emit_expression(method.receiver, lines), lines)
         arguments = method.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
-        saved = [@locals, @receiver, @return_label, @loop_labels, @block_context]
+        caller = location(node.span)
+        saved = block_environment
         @block_context = saved
         @receiver = receiver
         @return_label = "block_exit_#{node.exit_id}"
         @loop_labels = nil
-        statements = []
-        inline_locals(method.locals, method.parameters.zip(arguments).to_h, statements)
-        statements << "    #{emit_expression(method.body, statements)}"
-        emit_value("'#{@return_label}: {\n#{statements.join("\n")}\n    }", lines)
+        @retry_label = nil
+        @frame_name = "#{method.class_name}##{method.name}"
+        @block_depth = 0
+        emit_inline_method(method, arguments, caller, lines)
       ensure
-        @locals, @receiver, @return_label, @loop_labels, @block_context = saved if saved
+        restore_block_environment(saved) if saved
+      end
+
+      def emit_inline_method(method, arguments, caller, lines)
+        traced_result([caller], lines) do |statements|
+          with_target(@return_label) do
+            inline_locals(method.locals, method.parameters.zip(arguments).to_h, statements)
+            body = []
+            body << "    #{emit_expression(method.body, body)}"
+            "'#{@return_label}: {\n#{body.join("\n")}\n    }"
+          end
+        end
       end
 
       def emit_yield(node, lines)
         arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }
-        saved = [@locals, @receiver, @return_label, @loop_labels, @block_context]
-        @locals, @receiver, @return_label, @loop_labels, @block_context = @block_context
+        caller = location(node.span)
+        saved = block_environment
+        restore_block_environment(@block_context)
         @locals = @locals.dup
-        statements = []
-        inline_locals(node.locals, node.parameters.to_h { |name| [name, arguments.fetch(0, "Value::Nil")] }, statements,
-                      capture: true)
-        statements << "    #{emit_expression(node.body, statements)}"
-        emit_value("{\n#{statements.join("\n")}\n    }", lines)
+        @block_depth += 1
+        traced_result([caller], lines) do |statements|
+          inline_locals(node.locals, node.parameters.to_h do |name|
+            [name, arguments.fetch(0, "Value::Nil")]
+          end, statements,
+                        capture: true)
+          emit_expression(node.body, statements)
+        end
       ensure
-        @locals, @receiver, @return_label, @loop_labels, @block_context = saved if saved
+        restore_block_environment(saved) if saved
+      end
+
+      def block_environment
+        [@locals, @receiver, @return_label, @loop_labels, @block_context, @frame_name, @block_depth, @retry_label]
+      end
+
+      def restore_block_environment(values)
+        @locals, @receiver, @return_label, @loop_labels, @block_context, @frame_name,
+          @block_depth, @retry_label = values
       end
 
       def emit_block_body(node, lines)
-        statements = []
-        statements << "    #{emit_expression(node.body, statements)}"
-        emit_value("'block_exit_#{node.exit_id}: {\n#{statements.join("\n")}\n    }", lines)
+        with_target("block_exit_#{node.exit_id}") do
+          statements = []
+          statements << "    #{emit_expression(node.body, statements)}"
+          emit_value("'block_exit_#{node.exit_id}: {\n#{statements.join("\n")}\n    }", lines)
+        end
       end
 
       def inline_locals(names, parameters, lines, capture: false)

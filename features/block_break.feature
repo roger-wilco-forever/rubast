@@ -343,16 +343,15 @@ Feature: Break from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
     And no Rust project was created
 
-  Scenario: Captured possible zero values on break paths cannot silently pass division checks
+  Scenario: Captured zero on a break path raises a runtime division error
     Given the Ruby source is:
       """
       total = 5
       2.times { |value| if value == 1; total = 0; break 7; end; total = 5 }
       puts 30 / total
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 3
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Different object break results remain unsupported
     Given the Ruby source is:

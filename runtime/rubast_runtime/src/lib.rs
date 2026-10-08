@@ -1,19 +1,50 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{self, Write};
+use std::ops::Deref;
 use std::rc::Rc;
 
-#[derive(Clone, PartialEq, Eq)]
+mod exceptions;
+use exceptions::ErrorRef;
+pub use exceptions::{Flow, Location, Outcome};
+
+#[derive(Debug)]
+pub struct RubyString {
+    text: RefCell<String>,
+    frozen: Option<&'static str>,
+}
+impl Deref for RubyString {
+    type Target = RefCell<String>;
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
+}
+impl PartialEq for RubyString {
+    fn eq(&self, other: &Self) -> bool {
+        *self.borrow() == *other.borrow()
+    }
+}
+impl Eq for RubyString {}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Value {
     Nil,
     Bool(bool),
     Integer(i64),
     Symbol(&'static str),
-    String(Rc<RefCell<String>>),
+    String(Rc<RubyString>),
+    Exception(ErrorRef),
     Object(usize),
 }
 
 impl Value {
+    pub fn frozen(text: String, inspected: &'static str) -> Self {
+        Self::String(Rc::new(RubyString {
+            text: RefCell::new(text),
+            frozen: Some(inspected),
+        }))
+    }
+
     fn into_integer(self) -> i128 {
         let Self::Integer(value) = self else {
             unreachable!("integer operation requires proven integer operands");
@@ -28,6 +59,7 @@ impl Value {
             Self::Integer(number) => number.to_string(),
             Self::Symbol(name) => name.to_owned(),
             Self::String(text) => text.borrow().clone(),
+            Self::Exception(error) => error.borrow().message.clone().into_ruby_string(),
             Self::Object(_) => unreachable!("object string conversion is unsupported"),
         }
     }
@@ -35,7 +67,10 @@ impl Value {
 
 impl From<String> for Value {
     fn from(text: String) -> Self {
-        Self::String(Rc::new(RefCell::new(text)))
+        Self::String(Rc::new(RubyString {
+            text: RefCell::new(text),
+            frozen: None,
+        }))
     }
 }
 
@@ -48,12 +83,16 @@ enum Object {
 pub struct Runtime {
     // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
     objects: Vec<Object>,
+    frames: Vec<Location>,
+    exceptions: Vec<ErrorRef>,
 }
 
 impl Runtime {
     pub fn new() -> Self {
         Self {
             objects: Vec::new(),
+            frames: Vec::new(),
+            exceptions: Vec::new(),
         }
     }
 
@@ -106,6 +145,93 @@ impl Runtime {
             _ => unreachable!("unknown integer binary operation"),
         };
         Value::Integer(result.try_into().expect("analysis proves an i64 result"))
+    }
+
+    pub fn checked_binary(
+        &mut self,
+        name: &str,
+        left: Value,
+        right: Value,
+        location: Location,
+    ) -> Outcome {
+        if matches!(name, "/" | "%") && matches!(right, Value::Integer(0)) {
+            let builtin = Location::new(
+                location.path,
+                location.line,
+                if name == "/" {
+                    "Integer#/"
+                } else {
+                    "Integer#%"
+                },
+            );
+            self.enter(location);
+            let result =
+                self.runtime_error("ZeroDivisionError", "divided by 0".to_owned(), builtin);
+            self.leave();
+            return result;
+        }
+        Ok(Self::binary(name, left, right))
+    }
+
+    pub fn checked_array(
+        &mut self,
+        name: &str,
+        receiver: Value,
+        arguments: Vec<Value>,
+        location: Location,
+    ) -> Outcome {
+        if name == "[]=" {
+            let Value::Object(id) = receiver else {
+                unreachable!()
+            };
+            let Object::Array(values) = &self.objects[id] else {
+                unreachable!()
+            };
+            let Value::Integer(index) = arguments[0] else {
+                unreachable!()
+            };
+            if i128::from(index) < -(values.len() as i128) {
+                let message = format!(
+                    "index {} too small for array; minimum: {}",
+                    index,
+                    -(values.len() as i128)
+                );
+                return self.runtime_error("IndexError", message, location);
+            }
+        }
+        Ok(self.array_operation(name, receiver, arguments))
+    }
+
+    pub fn checked_string(
+        &mut self,
+        name: &str,
+        receiver: Value,
+        arguments: Vec<Value>,
+        location: Location,
+    ) -> Outcome {
+        let Value::String(text) = &receiver else {
+            unreachable!()
+        };
+        if text.frozen.is_some() && matches!(name, "<<" | "concat" | "replace" | "clear" | "chomp!")
+        {
+            let message = format!("can't modify frozen String: {}", text.frozen.unwrap());
+            if name != "<<" {
+                let label = match name {
+                    "concat" => "String#concat",
+                    "replace" => "String#replace",
+                    "clear" => "String#clear",
+                    "chomp!" => "String#chomp!",
+                    _ => unreachable!(),
+                };
+                let builtin = Location::new(location.path, location.line, label);
+                self.enter(location);
+                let result = self.runtime_error("FrozenError", message, builtin);
+                self.leave();
+                return result;
+            }
+            return self.runtime_error("FrozenError", message, location);
+        }
+        Ok(Self::string_operation(name, receiver, arguments))
     }
 
     pub fn new_object(&mut self) -> Value {
@@ -271,7 +397,11 @@ impl Runtime {
                 Self::chomp_text(&mut copy);
                 Value::from(copy)
             }
-            Value::Bool(_) | Value::Integer(_) | Value::Symbol(_) | Value::Object(_) => {
+            Value::Bool(_)
+            | Value::Integer(_)
+            | Value::Symbol(_)
+            | Value::Object(_)
+            | Value::Exception(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }
         }

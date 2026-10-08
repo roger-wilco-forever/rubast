@@ -133,8 +133,6 @@ Feature: Preserve scalar comparisons and bounded integer arithmetic
       | puts 9223372036854775807 * 2                                                  | E_INTEGER_RANGE |
       | puts -(-9223372036854775808)                                                  | E_INTEGER_RANGE |
       | puts -9223372036854775808 / -1                                                | E_INTEGER_RANGE |
-      | puts 1 / 0                                                                    | E_UNSUPPORTED   |
-      | puts 1 % 0                                                                    | E_UNSUPPORTED   |
       | puts true + 1                                                                 | E_UNSUPPORTED   |
       | puts nil < 1                                                                  | E_UNSUPPORTED   |
       | puts 2 ** 3                                                                   | E_UNSUPPORTED   |
@@ -144,6 +142,22 @@ Feature: Preserve scalar comparisons and bounded integer arithmetic
     Given the Ruby source is:
       """
       puts "Ada" + "Zoë"
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Execute puts 1 / 0 against CRuby
+    Given the Ruby source is:
+      """
+      puts 1 / 0
+      """
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
+
+  Scenario: Execute puts 1 % 0 against CRuby
+    Given the Ruby source is:
+      """
+      puts 1 % 0
       """
     When I run Rubast
     Then stdout, stderr, and exit status match CRuby
