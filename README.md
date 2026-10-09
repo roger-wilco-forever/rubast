@@ -196,7 +196,9 @@ python3 benchmarks/synthetic.py
 
 The runner requires Python 3 and Linux with GNU `/usr/bin/time`, in addition to the compiler toolchain. The output directory must not exist. Each workload's output, errors, and exit status must match CRuby before timing. Compiler checks should run separately from benchmarks to avoid competing load. See the report for measurement conditions and the limits of startup-heavy, unrolled workloads.
 
-The [stage-18 application benchmark](docs/practical-benchmarks.md) measures one million quote calculations, invoice summaries, and receipt labels, with a separate startup control. It records fresh generation/release builds, binary size, peak process RSS, and paired baseline/optimized timings. A targeted interpolation change removes intermediate String copies while preserving frozen/shared values. Sustained execution does not yet beat CRuby on these programs; startup and process-memory benefits remain distinct from throughput.
+The [stage-18 application benchmark](docs/practical-benchmarks.md) measures one million quote calculations, invoice summaries, and receipt labels, with a separate startup control. It records fresh generation/release builds, binary size, peak process RSS, and paired baseline/optimized timings. A targeted interpolation change removes intermediate String copies while preserving frozen/shared values. Those recorded sustained runs were slower than CRuby; startup and process-memory benefits remain distinct from throughput.
+
+The [stage-20 profile-guided measurement](docs/profile-guided-performance.md) refreshes the stage-19 baseline. Inlining the runtime frame push improves paired quote/invoice medians by 3.3%/4.3%; those workloads remain slower than CRuby. Receipt has a 1.2% negative median change in the same window. The report records all timings, RSS, build costs, and executable CPU profiles, including sampling limits and unchanged memory retention.
 
 ```sh
 python3 benchmarks/practical.py --output target/practical-current

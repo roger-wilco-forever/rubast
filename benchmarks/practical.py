@@ -26,7 +26,7 @@ def digest(path):
 def inventory():
     paths = [path for directory in ("app", "lib", "runtime/rubast_runtime/src", "benchmarks/workloads",
                                     "examples/workloads") for path in (ROOT / directory).rglob("*")
-             if path.is_file() and path.suffix in (".rb", ".rs")]
+             if path.is_file() and path.suffix in (".rb", ".rs", ".json")]
     return {str(path.relative_to(ROOT)): digest(path) for path in sorted(paths)}
 
 

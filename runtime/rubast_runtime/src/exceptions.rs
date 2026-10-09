@@ -141,6 +141,7 @@ impl Runtime {
     pub fn leave_exception(&mut self) {
         self.exceptions.pop();
     }
+    #[inline]
     pub fn enter(&mut self, location: Location) {
         self.frames.push(location);
     }

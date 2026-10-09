@@ -1,0 +1,496 @@
+{
+  "date_utc": "2026-10-09T12:07:53.081393+00:00",
+  "compiler_commit": "334534283635515cfbf21b5a6c672def50500561",
+  "compiler_dirty": true,
+  "runner_sha256": "6b6495bc242e3eeada39a9c62dd57b7851bd79a902de2a22c38005276e6d2ab8",
+  "sources": {
+    "app/analysis/arguments.rb": "fc9b76cd90a29c23115722a84e79b22d0e2fe683f166a10c0aa7b67e7ef69cf8",
+    "app/analysis/block_arguments.rb": "60c7b728699898a7a96231a1389819f3503e764b6525b8ff05713402a1f529b1",
+    "app/analysis/blocks.rb": "e3b17edb344e0538147e1deefa7db87253f2470f50ab33e4f07ee654ba56c6d0",
+    "app/analysis/call_arguments.rb": "492306389fc101839621394d97ef0faf0c900075ed228979d53e43bc46277905",
+    "app/analysis/collections.rb": "80fc09130496e0295cfd34c8f1a0d2688ad57735013a0223109929e1a02f53a4",
+    "app/analysis/exceptions.rb": "fb82aaaba159ebf92e2ea41a6521e2018746057343e64a0d41ae611ca7c8e130",
+    "app/analysis/hashes.rb": "a4e62ecb4a6c2c879aa656dd100929a5f2a3094f72614747eb5f0af3ab3fd5ce",
+    "app/analysis/iterators.rb": "f7db1721b7b5f7c6146f7bae0a75edc7bef1152f220fa731c710dea39c6c63fb",
+    "app/analysis/loop_analysis.rb": "d095b37161e5e425c98a51bf8c86479bb78f186f4b24ebe98902cac6f1652998",
+    "app/analysis/modules.rb": "c895afb5d3e04903daafa6d4c733316f1226a35106d7a6c5835f532f88e4c9bf",
+    "app/analysis/namespaces.rb": "cb7cd00d246badb00abdc26e10c07e11f210ae1dcf73afb882f8597d0e649a4b",
+    "app/analysis/native_methods.rb": "9394a768645999977fc778165e74d03ce6352c2636f4a868131d9e000a700a3c",
+    "app/analysis/reflection.rb": "fde62d363bdfb50d9db011e654ebfb07a096856526dac9770247f7135b24ebee",
+    "app/analysis/registry_operations.rb": "2b287b93cf1def56f8b5ab77da5be30b427de7d4c5a0d5b2eb4f4c2357b70c90",
+    "app/analysis/static_dispatch.rb": "d17da70594af51dbfb4fa557ba09be720f7b863d9c649f22ddbe024349a64a96",
+    "app/analysis/text_io.rb": "f96a178c7ef7fa26672078006255bf621c242c276691d66728b8b6d845e0ba6d",
+    "app/analysis/validator.rb": "fcb0fcc6e41675cb4583bfb1a329fb932dd0f28e2502bba2dc5aa1c67495b082",
+    "app/analysis/visibility.rb": "665b76863d81cacf72ca36ca0ab232f0e6bed283e1306d36a165e32d9e0e2d96",
+    "app/backend/blocks.rb": "2931ec6edbf18045ca2743b68605708ad4a5ad30c9971b31a89f2c7f84f66528",
+    "app/backend/exceptions.rb": "b179681a9ef79859d73d328706aadb6c79d8241f17d3d730bd1c1d818e86edeb",
+    "app/backend/iterators.rb": "c9d4b03e31a7a2cf29efc185fd4b7434e850a54ece5c616e96196ea7582cbb87",
+    "app/backend/namespaces.rb": "ed9515ebc9bf0bd59e4799da1731b597cc3b48a1403f098faf1661988d5f0cf3",
+    "app/backend/reflection.rb": "adef32fbddc6ccbab142176484d545963e5a5292c5f030e2c98e6a88a04b2a13",
+    "app/backend/rust.rb": "506e3720fff4f8f7e59f4dc0dc3debf6b8153439f520ce14b367cc622956e710",
+    "app/backend/source_map.rb": "3383cf2ff4d1deddf50746377ce316583cefddd446c3ece381af2a081a7be1c8",
+    "app/build/cargo.rb": "1dd654be024745637642162b7c6a9a51f1a5c6664d1a0c1593ef78031faf3fef",
+    "app/build/diagnostics.rb": "c4f1110f0bc6bd264c242ca8e472689cebcaa12c3e3b16da7a6314daee150a38",
+    "app/build/writer.rb": "c4aab037ec48970554ef38d98299a4b9ba176c7f4e8d48cd627d1bcd2c7e985e",
+    "app/compiler.rb": "f0429b9d8526d62a419ead24a62cb3322bdcecd8e40feb9ea809a627e066b8ba",
+    "app/debug/ir.rb": "0d86788d9330db0b0c0a4183e0f31f363c679de01c58e8f0777dff9df3b2fbb7",
+    "app/frontend/arguments.rb": "d4f0c037b8d6859f6340803be0b12c754fb8dadade91ea76aa0aca57e43e6bcd",
+    "app/frontend/block_scopes.rb": "acaf9665a20907480b3ac27410107328085f03459130252ec4fcb5e37b8fc6d8",
+    "app/frontend/exceptions.rb": "344426b7a7717cfb69a004794a142d3b4ecb5a033bf9d754af055fce9d3c8c9d",
+    "app/frontend/loader.rb": "096ee5fae75c174c8ab9881678958e20afdc70c4e7723f1eeda96375a744fbb8",
+    "app/frontend/namespaces.rb": "d23a941b1425286e2a0a547936f93c989c79da96013d1891ebaffd5c910b65ca",
+    "app/frontend/normalizer.rb": "705f5f0819d76e45186bfe1b8f187e9bf9f13d3e002d36760e079fc82d516481",
+    "app/frontend/parser.rb": "cae2f9a07ff22d826b0224019f846df4a667948de6277b616d621072faa89055",
+    "app/source/reader.rb": "ff3c4da99d98e3739f6a50a23559d19f6c35e63d2871f6a3959d1fa789a99849",
+    "benchmarks/workloads/invoice_summaries.rb": "ffaff936226205a7393fc657e4c900973589d4c9cca179e97a3d4cdfe3213dab",
+    "benchmarks/workloads/quote_requests.rb": "2c728ff023fce051a2e1594ce67a69f0d75cafc52695f9b918fa8ba29491714c",
+    "benchmarks/workloads/receipt_labels.rb": "9fc01c6c5766915cfd19bfb8e93a7d2212f699b87e5a38dfa529be47dbf8a6af",
+    "benchmarks/workloads/startup.rb": "1c817deb34d9eefd0b989ee11edbce39abd902e247ce53651e8f1b093d870c2b",
+    "examples/workloads/class_definitions.rb": "f02ec9f32fd9846a34621b3348ffacbc818725f6d0fcb94c20d70dfc15fd9d75",
+    "examples/workloads/dynamic_registry.rb": "ed6ccabced9d87d4d75a0866280ebfa87a6b156ea6b3fcf8d40ae9755f5d596e",
+    "examples/workloads/invoice.rb": "f59ae50cb54c0feb96f678ba6e423ab9aa13ec9e7da85054194044cad6a60811",
+    "examples/workloads/log_summary.rb": "77f24a555b2f3da7ec8da60ff6ea9938327d8a6ed73f92e01909e47e394f6b52",
+    "examples/workloads/modular_quote.rb": "dc912fab9aa738a25a2035f2773b92e6c76275f70c415ff3043d75fa42a8427d",
+    "examples/workloads/multi_file_quote.rb": "c30d05d29917542d782b36fde21726f4bbe0c3c86b6e63f55021f81bfbeff1cb",
+    "examples/workloads/notification.rb": "fcaa35dc3a7b4dd2d2ca837a0f108ad63391adc69e75834f3745ce279c0de403",
+    "examples/workloads/quote_app/preferred_quote.rb": "8495dec29fa4a22bc1f30af9cd05a4ae6922357ddc31c7581dc6575faffda6e8",
+    "examples/workloads/quote_app/quote.rb": "78eea4d6926158a042aa0ca24bc94946b341d076b9da4f64fd2c6aa8fb08eae3",
+    "examples/workloads/quote_app/shop.rb": "9842a17d8752819d6619f96150ac31c2a1ae6fe1d260be6ad242022b7df8c16b",
+    "examples/workloads/shipping.rb": "a2cb8e1efe0dc38b29f4e41ee4341ac11fda2d372aa807aaf851b380f465e057",
+    "examples/workloads/shopping_cart.rb": "f6cfd9c6ad27dbea10af85c056fd167071b5d6e0be6e971437ee293021161684",
+    "examples/workloads/text_report.rb": "b9bd19de52cceea2b4939c01d82769f9afedde76e3e9a1dec1574d296956c302",
+    "examples/workloads/unit_pricing.rb": "81ee1a305233cd9d19a705c88a83fb5d673b1707397118b5edf02e98535ec9da",
+    "lib/rubast/compilation_error.rb": "6e22ed45341ddc90af0e54b14610857eec4bb587d17661e87629684461050bfd",
+    "lib/rubast/generated_project.rb": "f54fe069c50a8f6e32a6282fb5b510bc9a811fdbc4bf2222a5b3cfc339acca48",
+    "lib/rubast/ir/dynamic.rb": "d4c0f2c8efae5d3fc574a3f4727c8fd374ddf4324beeb87fdbde9194fc9e65fc",
+    "lib/rubast/ir.rb": "fa1bfc63c2dd2430fa14026000cf3f4368b6ac49683bd5b5eca46ea1b9d20f2a",
+    "lib/rubast/native_methods.json": "ce09f4a93e8d4febd644bd6f4161f37fba893306e03fce767acf2bb6d97ef063",
+    "lib/rubast/source_file.rb": "525a1c320b30a9133622a2e6f2d9382fd105bb8dc0541ea83cac3b85bb98dec3",
+    "lib/rubast/span.rb": "d881d161d1eb351ac1463c23e079c07f30a0b039be2df633993939776b5d7837",
+    "lib/rubast.rb": "dcc9dc6a7db1d38204825f8e498343c3df5a463192f18f8fafb6da527ea938f5",
+    "runtime/rubast_runtime/src/exceptions.rs": "f197129295498e05ded8df89a4dbfbec0a2b16cfb29dc37d2da866f73a77a91e",
+    "runtime/rubast_runtime/src/lib.rs": "442a382607706bf8c6bafea151f30254a562aedbf6b5add52ce0dd5e8b844dd7",
+    "runtime/rubast_runtime/src/text_io/inspection/nonprintable.rs": "0a15543e1c395ec44b25c376ac3387e8c7153e2ddbe1f241b71f4f1170c35cee",
+    "runtime/rubast_runtime/src/text_io/inspection.rs": "d6fcd47566cd6fbdb5c50e6cb528f0e5eb983140ded778bc91b953f9ee3be06c",
+    "runtime/rubast_runtime/src/text_io.rs": "36262e7d8b82a7586c4b9e8535cb95826d54f90a904e6c77fd72b8f22e9c369c"
+  },
+  "ruby": "ruby 3.4.5 (2025-07-16 revision 20cda200d3) +PRISM [x86_64-linux]",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "python": "3.14.7",
+  "platform": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+  "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+  "original_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "affinity": [
+    0
+  ],
+  "rubyopt": "",
+  "rustflags": "",
+  "cargo_target_dir": "",
+  "samples": 21,
+  "build_samples": 3,
+  "rss_samples": 7,
+  "warmups": 3,
+  "measured_stdin_bytes": 897,
+  "measured_stdin_sha256": "c60eefbca3a78b8d86c832ff8d81d3873d0eb0387bba9330526b173424ed6a1c",
+  "baseline_report": null,
+  "results": [
+    {
+      "case": "startup",
+      "iterations": 0,
+      "builds": [
+        {
+          "emit_s": 0.29639276198577136,
+          "cargo_s": 0.7663904229993932,
+          "total_s": 1.0627831849851646
+        },
+        {
+          "emit_s": 0.25619545101653785,
+          "cargo_s": 0.7357968599535525,
+          "total_s": 0.9919923109700903
+        },
+        {
+          "emit_s": 0.2530565180350095,
+          "cargo_s": 0.7468015640042722,
+          "total_s": 0.9998580820392817
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage20-before/startup-0/target/release/rubast_program",
+      "binary_sha256": "8e3b01664e7bb9b7c33d7e54c5b4d6e429a325a3f25fdcdc963507962d65fd59",
+      "binary_bytes": 524104,
+      "wall_ms": {
+        "ruby": [
+          28.173036,
+          28.189545,
+          28.118326,
+          30.327477,
+          30.740483,
+          27.763158,
+          28.025906,
+          27.59987,
+          27.50731,
+          27.350822,
+          27.189624,
+          27.504121,
+          27.241533,
+          27.56142,
+          27.947946,
+          27.732489,
+          27.309263,
+          27.385512,
+          27.404452,
+          27.148134,
+          28.047936
+        ],
+        "rust": [
+          0.548275,
+          0.635835,
+          0.566225,
+          0.512135,
+          0.569905,
+          0.498566,
+          0.536356,
+          0.494485,
+          0.632205,
+          0.510826,
+          0.488175,
+          0.538815,
+          0.481256,
+          0.578035,
+          0.504666,
+          0.540025,
+          0.504075,
+          0.508596,
+          0.518735,
+          0.525636,
+          0.646755
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          13900,
+          13916,
+          13888,
+          14108,
+          13912,
+          14108,
+          13908
+        ],
+        "rust": [
+          2124,
+          2072,
+          2312,
+          2324,
+          1944,
+          2056,
+          2184
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "quote_requests",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.27679717203136533,
+          "cargo_s": 1.1521276679704897,
+          "total_s": 1.428924840001855
+        },
+        {
+          "emit_s": 0.2829190790071152,
+          "cargo_s": 1.1092549610184506,
+          "total_s": 1.3921740400255658
+        },
+        {
+          "emit_s": 0.2798401459585875,
+          "cargo_s": 1.1122363450122066,
+          "total_s": 1.3920764909707941
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage20-before/quote_requests-0/target/release/rubast_program",
+      "binary_sha256": "dee3ff2e4b3314beb74c5537051a7856af928ddb80806b1e602825add107594d",
+      "binary_bytes": 614216,
+      "wall_ms": {
+        "ruby": [
+          134.48303,
+          131.809034,
+          132.20066,
+          134.073984,
+          131.956382,
+          140.113941,
+          133.214641,
+          132.424978,
+          134.157183,
+          133.901175,
+          133.233811,
+          132.243579,
+          135.146234,
+          137.690763,
+          132.004891,
+          132.311539,
+          133.973734,
+          134.666798,
+          133.780496,
+          135.236454,
+          131.123129
+        ],
+        "rust": [
+          370.968923,
+          374.318133,
+          386.886505,
+          383.556623,
+          364.143642,
+          369.498246,
+          378.304439,
+          372.334611,
+          376.356646,
+          375.250066,
+          382.363064,
+          360.97929,
+          373.126884,
+          383.671362,
+          381.471402,
+          382.139846,
+          372.740458,
+          378.328089,
+          373.416512,
+          384.747983,
+          369.099729
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          14024,
+          14108,
+          14044,
+          14044,
+          14108,
+          14100,
+          14044
+        ],
+        "rust": [
+          2276,
+          2420,
+          2160,
+          2396,
+          2432,
+          2160,
+          2072
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "invoice_summaries",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.2895070919767022,
+          "cargo_s": 1.068826403003186,
+          "total_s": 1.3583334949798882
+        },
+        {
+          "emit_s": 0.2840204199892469,
+          "cargo_s": 1.0902719759615138,
+          "total_s": 1.3742923959507607
+        },
+        {
+          "emit_s": 0.3182299709878862,
+          "cargo_s": 1.1022046629805118,
+          "total_s": 1.420434633968398
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage20-before/invoice_summaries-0/target/release/rubast_program",
+      "binary_sha256": "cee9295b5f144bd1000ac64955e2b283f827e652aa22c069e25ec51c4c4aa0b7",
+      "binary_bytes": 623032,
+      "wall_ms": {
+        "ruby": [
+          529.104597,
+          535.823409,
+          545.201677,
+          533.616618,
+          538.504156,
+          527.280563,
+          530.462336,
+          556.946485,
+          533.032463,
+          535.859898,
+          535.120626,
+          548.527038,
+          538.01013,
+          531.342368,
+          553.778403,
+          554.00101,
+          539.898033,
+          534.971376,
+          561.125549,
+          538.095309,
+          566.74073
+        ],
+        "rust": [
+          670.043842,
+          648.715007,
+          648.937295,
+          666.189345,
+          659.395564,
+          709.832055,
+          649.943486,
+          654.717285,
+          669.530976,
+          673.175904,
+          651.335665,
+          656.721137,
+          665.739009,
+          665.64248,
+          658.430973,
+          677.285659,
+          665.349083,
+          677.20475,
+          658.7057,
+          650.860689,
+          665.403112
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          14652,
+          14648,
+          14684,
+          14648,
+          14684,
+          14648,
+          14684
+        ],
+        "rust": [
+          2156,
+          2412,
+          2416,
+          2312,
+          2228,
+          2252,
+          2300
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "receipt_labels",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.2627160840202123,
+          "cargo_s": 0.8249091299949214,
+          "total_s": 1.0876252140151337
+        },
+        {
+          "emit_s": 0.2651387740042992,
+          "cargo_s": 0.8293815549695864,
+          "total_s": 1.0945203289738856
+        },
+        {
+          "emit_s": 0.2633940690429881,
+          "cargo_s": 0.8288207500008866,
+          "total_s": 1.0922148190438747
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage20-before/receipt_labels-0/target/release/rubast_program",
+      "binary_sha256": "ff91fa9e3bdd22bd770425ee7617c8be1637e1d17e184e812497d12aeab82a10",
+      "binary_bytes": 554392,
+      "wall_ms": {
+        "ruby": [
+          246.064299,
+          249.114723,
+          247.19192,
+          256.060993,
+          244.019447,
+          259.400983,
+          260.391125,
+          258.614771,
+          244.638891,
+          254.663005,
+          250.418301,
+          247.23542,
+          246.857073,
+          260.207077,
+          246.104069,
+          248.175611,
+          259.656951,
+          243.292624,
+          246.927782,
+          245.694923,
+          245.537355
+        ],
+        "rust": [
+          242.166854,
+          292.473626,
+          233.663767,
+          231.243088,
+          230.648973,
+          229.057608,
+          227.506691,
+          225.700017,
+          258.66664,
+          228.591742,
+          228.161605,
+          227.387492,
+          227.476292,
+          240.102921,
+          227.047565,
+          250.524201,
+          227.877127,
+          225.836286,
+          258.5355,
+          248.722387,
+          229.327126
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          15672,
+          15444,
+          15632,
+          15196,
+          15636,
+          15632,
+          15580
+        ],
+        "rust": [
+          2072,
+          2128,
+          2100,
+          2116,
+          2068,
+          2072,
+          2124
+        ]
+      },
+      "matched_inputs": 3
+    }
+  ]
+}

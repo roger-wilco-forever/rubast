@@ -20,6 +20,8 @@ Stage 14 adds executed class/module bodies, lexical/qualified/absolute/inherited
 
 Stage 15 adds static file-level require_relative and restricted require with explicit relative/absolute paths. The frontend loader builds nested source-load IR with a per-run canonical-path guard for repeats/cycles. Analysis validates each file in an isolated local scope with shared namespace/object tables. Emission embeds all dependencies, preserving load-time warnings, first-load booleans, and required-file backtrace frames. Computed paths, conditional/method/block/namespace-body loading, load/autoload, load-path/gem lookup, native extensions, and mutable loaded-feature state receive diagnostics. See README and features/source_loading.feature for the exact contract.
 
+Stage 20 profiles retained release projects with benchmarks/profile.py and its Linux/glibc/GCC/gprof sampler, then measures the final change separately with benchmarks/practical.py. Runtime::enter is inlineable across the runtime crate boundary; frame storage and exception snapshots retain their existing behavior. Benchmark inventories include native JSON metadata. Keep timing, profiling, and bin/verify separate, verify retained hashes/input comparisons, and report small regressions as well as improvements. See docs/profile-guided-performance.md.
+
 ## Invariants
 
 1. **An accepted construct must behave like CRuby on its declared inputs.** A green parser or validator test does not establish runtime support. Add a Cucumber scenario that executes the generated program and compares stdout, stderr, and exit status with pinned CRuby before expanding the accepted subset.

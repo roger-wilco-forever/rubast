@@ -256,6 +256,40 @@ All planned stage 19 areas now have implemented selections and explicit boundari
 
 **Verification:** new differential cases failed before implementation, including reflective identifier promotion and exclusion of JSON extensions from native metadata. Final bin/verify passed: RuboCop (94 files), 6 RSpec examples, 998 Cucumber scenarios (3,491 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Existing declaration-value scenarios remain unchanged and pass. Native metadata regeneration is byte-for-byte reproducible; the gem specification includes the metadata. Stage 18 benchmarks were not rerun for this stage.
 
+### 20. Profile-guided performance — complete
+
+Refresh the stage 19 release baseline using the existing application workloads, then profile generated programs and optimize the largest measured runtime cost. Keep startup, sustained execution, compilation cost, peak RSS, and binary size separate. Retain the baseline binaries and compare them with the final binaries in the same shuffled measurement window.
+
+**Acceptance:** record reproducible sources, inputs, versions, flags, raw samples, and profile evidence. All engines match CRuby on the established inputs. An optimization preserves the current subset, evaluation order, aliases, exceptions, and backtraces; the measured improvement and any regressions are reported. Final bin/verify passes before committing and pushing.
+
+**Implemented:** a one-line inline attribute on Runtime::enter follows the largest separately named runtime cost in the quote profile. The final 21-pair comparison improves quote/invoice medians by 3.27%/4.32%, while receipt is 1.19% slower. All binaries match CRuby on three inputs. Retained artifacts, raw timing/RSS/build samples, CPU profiles, and limits are in [the measured report](profile-guided-performance.md).
+
+**Verification:** bin/verify passed: RuboCop (94 files), 6 RSpec examples, 998 Cucumber scenarios (3,491 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Profiling self-checks, strict GCC compilation, Python byte-compilation, sample counts, retained binary hashes, unchanged workload/runner hashes, native metadata inventory, and documentation links were checked separately. The final paired timing window, profiling, and full verification ran separately.
+
+### 21. Practical collections — planned
+
+Add selected String hash keys, traversal of variable-sized collections, and fresh objects/collections inside loops. Use order processing and log analysis to select the concrete APIs. Define runtime shape validation, key identity/mutation, traversal changes, and allocation limits before accepting each operation.
+
+**Acceptance:** realistic workloads compare with CRuby, including aliases, changed collection sizes, and failure paths. Allocation remains explicitly bounded until stage 22 provides reclamation; no unbounded-allocation claim is made.
+
+### 22. Memory management — planned
+
+Reclaim unreachable arena objects while preserving aliases and cycles. Define roots across locals, fields, constants, calls, blocks, and pending exceptions/control exits; select the reclamation mechanism from measured long-running workloads.
+
+**Acceptance:** sustained allocation workloads show bounded retained memory when objects become unreachable. Reachable cyclic graphs retain identity and behavior; reclamation is checked separately from process RSS. Finalizers remain a separate contract.
+
+### 23. Closures — planned
+
+Implement selected Proc/lambda values, retained blocks, and Symbol-to-Proc. Specify captured mutable bindings, lexical self, lifetime, arity, and the distinct return/break rules before expanding the current literal-block contract.
+
+**Acceptance:** escaped closures preserve captures after their defining call finishes, and supported exits/errors match CRuby. Unsupported closure shapes remain located diagnostics.
+
+### 24. Extended metaprogramming — planned
+
+Build on closures to add selected define_method, computed send selectors, and additional reflection APIs. Define how runtime definitions interact with existing specialization, visibility, inheritance, and reopened namespaces.
+
+**Acceptance:** subsequent calls observe supported runtime changes like CRuby, including invalidation and hook/error behavior. Arbitrary eval/loading, native extensions, threads, and Fiber remain separate directions without a support commitment.
+
 ## Next action
 
-Stage 19 completes the selected implementation sequence. No subsequent stage has been selected. Arbitrary eval/loading, native extensions, threads, and Fiber remain separate directions without a support commitment.
+Stage 20 is complete. Next implement stage 21's selected practical-collection contracts and bounded allocation, using realistic order/log workloads to choose each API. Complete its checks, documentation, commit, and push before starting stage 22.
