@@ -421,8 +421,7 @@ module Rubast
           target = lookup_method(type.class_name, node.name)
           return defer_call(node, receiver, locals) if !target && unbound_module_owner?(type.class_name)
           return validate_new(node, locals, receiver) if constructor_call?(node, type, target)
-          return validate_nil_predicate(node, receiver, type) if node.name == :nil? && !target
-          return validate_identity(node, receiver, type, locals) unless target
+          return validate_user_builtin(node, receiver, type, locals) unless target
 
           validate_object_call(node, receiver, type, target, locals)
         end
@@ -444,10 +443,7 @@ module Rubast
 
         def validate_object_call(node, receiver, type, target, locals)
           check_method_visibility(node, type, target)
-          owner, method = target
-          invocation = validate_invocation(node, method, locals, type, owner: owner)
-          IR::MethodCall.new(class_name: owner, name: node.name, receiver: receiver, **invocation,
-                             result_type: invocation.fetch(:body).result_type, span: node.span)
+          resolved_method_call(node, receiver, type, target, locals)
         end
 
         def object_type(name, default)
@@ -482,6 +478,7 @@ module Rubast
         include Inheritance
         include Modules
         include Visibility
+        include StaticDispatch
         include RegistryOperations
         include InstanceState
         include MethodResults

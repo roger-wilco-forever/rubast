@@ -28,6 +28,7 @@ The CLI supports `run`, `build FILE -o BIN`, `emit-rust FILE -o DIR`, and `dump-
 | Project files, binary destinations, and runtime copying | [`app/build/writer.rb`](../app/build/writer.rb) |
 | Cargo execution and build diagnostics | [`app/build/cargo.rb`](../app/build/cargo.rb), [`app/build/diagnostics.rb`](../app/build/diagnostics.rb), [`spec/build/cargo_spec.rb`](../spec/build/cargo_spec.rb) |
 | Performance workloads and measurements | [`benchmarks/practical.py`](../benchmarks/practical.py), [`benchmarks/workloads/`](../benchmarks/workloads/), [`docs/practical-benchmarks.md`](practical-benchmarks.md); run separately from verification |
+| Literal send resolution and shared method invocation | [`app/analysis/static_dispatch.rb`](../app/analysis/static_dispatch.rb), [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`features/static_send.feature`](../features/static_send.feature) |
 | Stage wiring | [`app/compiler.rb`](../app/compiler.rb), [`system/container.rb`](../system/container.rb) |
 | End-to-end behavior and diagnostics | [`features/`](../features/), [`features/step_definitions/compiler_steps.rb`](../features/step_definitions/compiler_steps.rb) |
 | Component and wiring checks | [`spec/`](../spec/) |

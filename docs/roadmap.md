@@ -226,12 +226,28 @@ The targeted runtime change appends borrowed string bytes directly into the fres
 
 **Verification:** bin/verify passed: RuboCop (87 files), 6 RSpec examples, 902 Cucumber scenarios (3,160 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Focused scenarios passed before scaling from 100,000 to 1,000,000 iterations; the full gate executed the final workloads. All measured programs matched CRuby on three inputs; raw sample counts and retained/source/runner hashes were independently checked.
 
-### 19. Selected dynamic behavior — future evaluation
+### 19. Selected dynamic behavior — in progress
 
 Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_missing`, and selected reflection APIs one at a time. Each needs its own compatibility boundary and tests, including interactions with optimized calls.
 
 **Acceptance:** supported changes affect subsequent lookup like CRuby; unsupported dynamic behavior remains explicit. `eval`, arbitrary dynamic loading, native extensions, threads, and `Fiber` are separate major directions with no support commitment yet.
 
+#### 19.1 Literal send — complete
+
+Accept literal UTF-8 Symbol/String selectors for existing user instance/class/module methods, including static attribute methods. Resolve the concrete receiver through existing inheritance/include/prepend lookup and bypass visibility only for built-in send. Reuse ordinary argument validation and MethodCall emission, preserving defaults, splats, keywords, side-effect order, return values, exception locations, and specialized nested lookup. User-defined send methods retain their normal behavior, including supported blocks.
+
+**Boundary:** computed names, selector splats, blocks/block passes on built-in send, missing/native targets, initialize, native new, scalar receivers, safe navigation, public_send, and __send__ produce E_UNSUPPORTED before emission. No runtime method table or method_missing fallback is added. See [execution and boundary scenarios](../features/static_send.feature).
+
+**Verification:** the initial differential check failed in eight new execution scenarios before implementation. The focused feature now passes all 29 scenarios (104 steps). bin/verify passed: RuboCop (88 files), 6 RSpec examples, 931 Cucumber scenarios (3,264 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Ordinary calls, selected send calls, and documented boundaries execute in the same full gate.
+
+#### 19.2 Next evaluations
+
+1. Define respond_to? visibility, inherited/native method names, and respond_to_missing? behavior before accepting reflection.
+2. Define selected missing-method dispatch and its argument/block/error behavior before accepting method_missing fallback.
+3. Evaluate reopening and redefinition with versioned lookup/specialization; older emitted functions must not be reused after a definition changes.
+
+Each item needs its own executable CRuby comparison and explicit unsupported boundary before implementation. Stage 19 remains in progress until its selected contracts are implemented or explicitly deferred.
+
 ## Next action
 
-Stage 18 is complete and verified locally. Commit and push the measured change, workload checks, raw results, and documentation before starting stage 19. Next, define one selected dynamic-behavior contract and its interactions with existing static lookup/specialization before implementation; arbitrary eval and dynamic loading remain separate directions without a support commitment.
+Stage 19.1 is complete and verified locally; commit and push its implementation, tests, and documentation before proceeding. The next implementation begins with the respond_to? contract, visibility, native names, hooks, and user overrides. Stage 19 remains in progress; arbitrary eval and dynamic loading remain separate directions without a support commitment.
