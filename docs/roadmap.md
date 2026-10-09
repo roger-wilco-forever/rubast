@@ -226,7 +226,7 @@ The targeted runtime change appends borrowed string bytes directly into the fres
 
 **Verification:** bin/verify passed: RuboCop (87 files), 6 RSpec examples, 902 Cucumber scenarios (3,160 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Focused scenarios passed before scaling from 100,000 to 1,000,000 iterations; the full gate executed the final workloads. All measured programs matched CRuby on three inputs; raw sample counts and retained/source/runner hashes were independently checked.
 
-### 19. Selected dynamic behavior — in progress
+### 19. Selected dynamic behavior — complete
 
 Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_missing`, and selected reflection APIs one at a time. Each needs its own compatibility boundary and tests, including interactions with optimized calls.
 
@@ -236,18 +236,26 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 Accept literal UTF-8 Symbol/String selectors for existing user instance/class/module methods, including static attribute methods. Resolve the concrete receiver through existing inheritance/include/prepend lookup and bypass visibility only for built-in send. Reuse ordinary argument validation and MethodCall emission, preserving defaults, splats, keywords, side-effect order, return values, exception locations, and specialized nested lookup. User-defined send methods retain their normal behavior, including supported blocks.
 
-**Boundary:** computed names, selector splats, blocks/block passes on built-in send, missing/native targets, initialize, native new, scalar receivers, safe navigation, public_send, and __send__ produce E_UNSUPPORTED before emission. No runtime method table or method_missing fallback is added. See [execution and boundary scenarios](../features/static_send.feature).
+**Initial boundary:** computed names, selector splats, blocks/block passes on built-in send, missing/native targets, initialize, native new, scalar receivers, safe navigation, public_send, and __send__ produced E_UNSUPPORTED before emission. Sections 19.2–19.3 extend the block and missing-user-method selections. No runtime method table is added. See [execution and boundary scenarios](../features/static_send.feature).
 
-**Verification:** the initial differential check failed in eight new execution scenarios before implementation. The focused feature now passes all 29 scenarios (104 steps). bin/verify passed: RuboCop (88 files), 6 RSpec examples, 931 Cucumber scenarios (3,264 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Ordinary calls, selected send calls, and documented boundaries execute in the same full gate.
+**Initial verification:** the initial differential check failed in eight new execution scenarios before implementation. The focused feature passed all 29 scenarios (104 steps). bin/verify passed: RuboCop (88 files), 6 RSpec examples, 931 Cucumber scenarios (3,264 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Ordinary calls, selected send calls, and documented boundaries executed in the same full gate.
 
-#### 19.2 Next evaluations
+#### 19.2 Reflection and missing-method hooks — complete
 
-1. Define respond_to? visibility, inherited/native method names, and respond_to_missing? behavior before accepting reflection.
-2. Define selected missing-method dispatch and its argument/block/error behavior before accepting method_missing fallback.
-3. Evaluate reopening and redefinition with versioned lookup/specialization; older emitted functions must not be reused after a definition changes.
+Literal respond_to? queries user and pinned native visibility, supports truthy scalar include-private flags, and invokes inherited/composed respond_to_missing? hooks. User overrides retain lookup priority. Parsed/loaded/attribute identifiers distinguish existing static identifiers from fresh string hook names, preserving pinned CRuby's raw flag/result path and native backtrace labels. Reflective writes promote field identifiers globally at runtime; skipped writes and unset reads leave them unchanged. Literal instance_variable_get/set preserve field identity, evaluation order, and class instance state. Selected regular/send missing or inaccessible user calls reach method_missing with original arguments and blocks.
 
-Each item needs its own executable CRuby comparison and explicit unsupported boundary before implementation. Stage 19 remains in progress until its selected contracts are implemented or explicitly deferred.
+**Boundary:** computed reflection names, invalid field names/arities, custom include-private objects, native reflection blocks, default missing-method errors, recursive/native-super fallback, Method objects/enumeration, and ambiguous pre-existing native identifier string hooks remain diagnostics. Native method availability does not imply native call compilation support.
+
+#### 19.3 Reopening and definition replacement — complete
+
+Unconditional user class/module declarations reuse existing namespace objects, including aliases and qualified names. Kind and explicit superclass must match. Namespace locals/default visibility reset while constants, class fields, instances, and ancestors retain identity. Direct instance/class/eigenclass/attribute definitions replace methods. Emitted function keys and nested dispatch signatures include definition body spans, so later calls see replacements while earlier resolved calls keep their old implementation. All source definitions receive unused-body checks, including replaced ones. Written alias names remain in namespace body backtraces.
+
+**Boundary:** built-in namespace mutation, class/module kind or superclass changes, conditional/loop mutations, namespace callbacks, eval, define_method, broader singleton mutation, and arbitrary loading remain explicit diagnostics. Direct declaration assignments preserve existing support.
+
+All planned stage 19 areas now have implemented selections and explicit boundaries. Public_send/__send__, Method objects/enumeration, and broader runtime metaprogramming were not selected for this stage. [The complete contract](selected-dynamic.md), [combined tests](../features/selected_dynamic.feature), and [registry example](../examples/workloads/dynamic_registry.rb) document the selection.
+
+**Verification:** new differential cases failed before implementation, including reflective identifier promotion and exclusion of JSON extensions from native metadata. Final bin/verify passed: RuboCop (94 files), 6 RSpec examples, 998 Cucumber scenarios (3,491 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Existing declaration-value scenarios remain unchanged and pass. Native metadata regeneration is byte-for-byte reproducible; the gem specification includes the metadata. Stage 18 benchmarks were not rerun for this stage.
 
 ## Next action
 
-Stage 19.1 is complete and verified locally; commit and push its implementation, tests, and documentation before proceeding. The next implementation begins with the respond_to? contract, visibility, native names, hooks, and user overrides. Stage 19 remains in progress; arbitrary eval and dynamic loading remain separate directions without a support commitment.
+Stage 19 completes the selected implementation sequence. No subsequent stage has been selected. Arbitrary eval/loading, native extensions, threads, and Fiber remain separate directions without a support commitment.

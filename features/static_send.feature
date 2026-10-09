@@ -261,12 +261,9 @@ Feature: Send literal names to statically resolved user methods
       | class Item; def value; 1; end; end; Item.new.send(1)                                                      |
       | class Item; def value; 1; end; end; Item.new.send                                                        |
       | class Item; end; Item.new.send(:missing)                                                                |
-      | class Item; def method_missing(name); 1; end; end; Item.new.send(:missing)                               |
       | class Item; end; Item.new.send(:object_id)                                                              |
       | class Item; def initialize; end; end; Item.new.send(:initialize)                                        |
       | class Item; end; Item.send(:new)                                                                       |
-      | class Item; def value; yield; end; end; Item.new.send(:value) { 1 }                                      |
-      | class Item; def value; 1; end; end; Item.new.send(:value, &nil)                                           |
       | class Item; def value; 1; end; end; Item.new&.send(:value)                                                |
       | class Item; def value; send(:value); end; end; Item.new.send(:value)                                     |
       | 1.send(:to_s)                                                                                          |

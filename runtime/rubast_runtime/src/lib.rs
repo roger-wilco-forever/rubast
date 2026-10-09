@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -88,6 +88,7 @@ pub struct Runtime {
     // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
     objects: Vec<Object>,
     constants: HashMap<&'static str, Value>,
+    identifiers: HashSet<&'static str>,
     frames: Vec<Location>,
     exceptions: Vec<ErrorRef>,
 }
@@ -97,6 +98,7 @@ impl Runtime {
         Self {
             objects: Vec::new(),
             constants: HashMap::new(),
+            identifiers: HashSet::new(),
             frames: Vec::new(),
             exceptions: Vec::new(),
         }
@@ -440,6 +442,20 @@ impl Runtime {
         };
         fields.insert(name, value.clone());
         value
+    }
+
+    pub fn identifier_known(&self, name: &'static str) -> bool {
+        self.identifiers.contains(name)
+    }
+
+    pub fn set_reflected_ivar(
+        &mut self,
+        receiver: &Value,
+        name: &'static str,
+        value: Value,
+    ) -> Value {
+        self.identifiers.insert(name);
+        self.set_ivar(receiver, name, value)
     }
 
     pub fn safe_chomp(value: Value) -> Value {

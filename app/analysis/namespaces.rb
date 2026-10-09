@@ -90,14 +90,24 @@ module Rubast
 
         def validate_class(node)
           name = constant_destination(node.name)
-          unsupported(node) if existing_constant?(name)
           parent = namespace_parent(node)
-          register_namespace(name, node.kind, parent)
+          fresh = !existing_constant?(name)
+          name = reopen_namespace(node, name, parent) unless fresh
+          register_namespace(name, node.kind, parent) if fresh
           scope = node.locals.to_h { |local| [local, :nil] }
-          body = namespace_body(node, name, scope)
-          check_namespace_methods(name, scope)
+          body = namespace_body(node, name, scope, fresh: fresh)
           IR::NamespaceBody.new(name: name, kind: node.kind, receiver: namespace_read(name, node.span),
-                                locals: node.locals, body: body, result_type: body.result_type, span: node.span)
+                                locals: node.locals, body: body, result_type: body.result_type, span: node.span,
+                                label: constant_parts(node.name).first.last.to_s)
+        end
+
+        def reopen_namespace(node, name, parent)
+          type = @constants[name]
+          unsupported(node) unless namespace_type?(type)
+          actual = type.class_name.name
+          unsupported(node) unless @namespace_kinds[actual] == node.kind
+          unsupported(node) if node.superclass && @superclasses[actual] != parent
+          actual
         end
 
         def namespace_parent(node)
@@ -123,28 +133,49 @@ module Rubast
           IR::ConstantGet.new(name: name, result_type: @namespace_values.fetch(name), span: span)
         end
 
-        def namespace_body(node, name, locals)
-          saved = [@receiver_type, @constant_scopes, @definition_owner, @definition_key]
+        def namespace_body(node, name, locals, fresh:)
+          saved = [@receiver_type, @constant_scopes, @definition_owner, @definition_key, @namespace_methods]
+          visibility = @default_visibility.fetch(name, :public)
+          @default_visibility[name] = :public
+          @namespace_methods = []
           @receiver_type = @namespace_values.fetch(name)
           @constant_scopes = [name, *@constant_scopes]
           @definition_owner = name
           @definition_key = name
-          allocation = IR::ClassValue.new(result_type: @receiver_type, span: node.span)
-          first = IR::ConstantSet.new(name: name, value: allocation, result_type: @receiver_type, span: node.span)
+          first = namespace_entry(name, node.span, fresh)
           parts = [first, *node.definitions.map { |part| validate_namespace_part(part, locals) }]
+          check_namespace_methods(@namespace_methods, locals)
           last = node.definitions.empty? ? :nil : type_of(parts.last, locals)
           result = continuing_type(parts, locals, last)
           IR::Sequence.new(expressions: parts.freeze, result_type: result, span: node.span)
         ensure
-          @receiver_type, @constant_scopes, @definition_owner, @definition_key = saved
+          @default_visibility[name] = visibility
+          @receiver_type, @constant_scopes, @definition_owner, @definition_key, @namespace_methods = saved
+        end
+
+        def namespace_entry(name, span, fresh)
+          return namespace_read(name, span) unless fresh
+
+          allocation = IR::ClassValue.new(result_type: @receiver_type, span: span)
+          IR::ConstantSet.new(name: name, value: allocation, result_type: @receiver_type, span: span)
         end
 
         def validate_namespace_part(part, locals)
-          case part
-          when IR::MethodDefinition then register_namespace_method(part)
-          when IR::SingletonBody then validate_singleton_body(part)
-          else validate_statement(part, locals)
+          with_namespace_declaration(part) do
+            case part
+            when IR::MethodDefinition then register_namespace_method(part)
+            when IR::SingletonBody then validate_singleton_body(part)
+            else validate_statement(part, locals)
+            end
           end
+        end
+
+        def with_namespace_declaration(part)
+          previous = @namespace_declaration
+          @namespace_declaration = part
+          yield
+        ensure
+          @namespace_declaration = previous
         end
       end
 
@@ -153,12 +184,20 @@ module Rubast
 
         def register_namespace_method(method, singleton: method.singleton)
           owner = singleton ? IR::SingletonClass.new(name: @definition_owner) : @definition_key
+          reject_definition_callbacks(method, owner)
           methods = @classes.fetch(owner)
-          unsupported(method) if methods.key?(method.name)
           methods[method.name] = method
+          @namespace_methods << [owner, method]
+          @source_symbols |= [method.name.to_s]
           record_method_visibility(owner, method)
           @method_scopes[method] = @constant_scopes.dup.freeze
           IR::SymbolLiteral.new(value: method.name.to_s.encode(Encoding::UTF_8), span: method.span)
+        end
+
+        def reject_definition_callbacks(method, owner)
+          hooks = %i[method_added singleton_method_added inherited]
+          namespace = owner.is_a?(IR::SingletonClass) || @namespace_kinds[owner] == :module
+          unsupported(method) if namespace && hooks.include?(method.name)
         end
 
         def validate_singleton_body(node)
@@ -170,7 +209,7 @@ module Rubast
             if part.is_a?(IR::MethodDefinition) && !part.singleton
               register_namespace_method(part)
             elsif part.is_a?(IR::Call) && declaration_call?(part)
-              validate_declaration(part, {})
+              with_namespace_declaration(part) { validate_declaration(part, {}) }
             else
               unsupported(part)
             end
@@ -182,20 +221,18 @@ module Rubast
           @definition_key = previous
         end
 
-        def check_namespace_methods(name, locals)
+        def check_namespace_methods(methods, locals)
           before = snapshot(locals)
           count = @objects.length
           exits = flow_exit_counts
           previous = @checking_unused
           @checking_unused = true
-          [name, IR::SingletonClass.new(name: name)].each do |owner|
-            @classes.fetch(owner).each_value do |method|
-              receiver = object_type(owner, :unknown)
-              parameters = method.parameters.to_h { |parameter| [parameter, :unknown] }
-              position = method_ancestors(owner).index(owner)
-              target = IR::MethodOwner.new(key: owner, index: position)
-              validate_method_body(method, parameters, receiver, owner: target)
-            end
+          methods.each do |owner, method|
+            receiver = object_type(owner, :unknown)
+            parameters = method.parameters.to_h { |parameter| [parameter, :unknown] }
+            position = method_ancestors(owner).index(owner)
+            target = IR::MethodOwner.new(key: owner, index: position)
+            validate_method_body(method, parameters, receiver, owner: target)
           end
         ensure
           restore(before, locals)

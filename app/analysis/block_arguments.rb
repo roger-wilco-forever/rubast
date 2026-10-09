@@ -116,6 +116,10 @@ module Rubast
         return defer_block_pass(node, receiver, locals) if type == :unknown
 
         target = user_block_receiver?(type) && lookup_method(type.class_name, call.name)
+        if user_block_receiver?(type)
+          call, target = resolve_user_dispatch(call, type)
+          node = node.with(call: call)
+        end
         return validate_constructor_pass(node, receiver, type, locals) if constructor_call?(call, type, target)
 
         validate_passed_block(node, receiver, [type, block_method_target(call, type)], locals)

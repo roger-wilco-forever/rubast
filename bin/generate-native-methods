@@ -1,0 +1,25 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "open3"
+require "rbconfig"
+
+root = File.expand_path("..", __dir__)
+expected = File.read(File.join(root, ".ruby-version")).strip
+abort "Use pinned CRuby #{expected}" unless RUBY_ENGINE == "ruby" && expected == RUBY_VERSION
+
+# Generate in a clean Ruby process so compiler/test framework extensions cannot become Ruby APIs.
+code = <<~RUBY
+  symbols = Symbol.all_symbols.map(&:to_s).sort
+  tables = { object: Object, class: Class, module: Module }.transform_values do |type|
+    %i[public protected private].to_h do |visibility|
+      [visibility, type.public_send("\#{visibility}_instance_methods").map(&:to_s).sort]
+    end
+  end
+  require "json"
+  puts JSON.generate(ruby_version: RUBY_VERSION, methods: tables, symbols: symbols)
+RUBY
+stdout, stderr, status = Open3.capture3({ "RUBYOPT" => nil, "BUNDLE_GEMFILE" => nil },
+                                        RbConfig.ruby, "-e", code)
+abort stderr unless status.success?
+File.write(File.join(root, "lib/rubast/native_methods.json"), stdout)

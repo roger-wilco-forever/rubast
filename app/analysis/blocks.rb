@@ -198,7 +198,16 @@ module Rubast
           check_iterator_call(node)
           return validate_iterator_receiver(node, receiver, type, locals)
         end
+        validate_user_block_call(node, receiver, type, locals)
+      end
+
+      def validate_user_block_call(node, receiver, type, locals)
+        call = node.call
         target = lookup_method(type.class_name, call.name)
+        return defer_block_call(node, receiver, locals) if !target && unbound_module_owner?(type.class_name)
+
+        call, target = resolve_user_dispatch(call, type)
+        node = node.with(call: call)
         return validate_constructor_block(node, locals, receiver) if constructor_call?(call, type, target)
 
         unsupported(node) unless target && call.name != :initialize

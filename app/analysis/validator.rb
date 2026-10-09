@@ -420,6 +420,8 @@ module Rubast
           unsupported(node) if node.name == :initialize
           target = lookup_method(type.class_name, node.name)
           return defer_call(node, receiver, locals) if !target && unbound_module_owner?(type.class_name)
+
+          node, target = resolve_user_dispatch(node, type)
           return validate_new(node, locals, receiver) if constructor_call?(node, type, target)
           return validate_user_builtin(node, receiver, type, locals) unless target
 
@@ -479,6 +481,8 @@ module Rubast
         include Modules
         include Visibility
         include StaticDispatch
+        include NativeMethods
+        include Reflection
         include RegistryOperations
         include InstanceState
         include MethodResults
@@ -495,6 +499,7 @@ module Rubast
 
         def call(program)
           initialize_namespaces
+          @source_symbols = program.symbols.dup
           @active_methods = []
           @objects = []
           @captured_scopes = []
@@ -506,7 +511,8 @@ module Rubast
           @exception_context = exception_context(locals)
           @block_exit_contexts << @exception_context
           statements = program.statements.filter_map { |node| validate_statement(node, locals) }
-          IR::Program.new(statements: statements.freeze, locals: program.locals, warnings: program.warnings)
+          IR::Program.new(statements: statements.freeze, locals: program.locals, warnings: program.warnings,
+                          symbols: program.symbols)
         end
 
         private
@@ -583,6 +589,7 @@ module Rubast
       private
 
       def validate_source_load(node)
+        @source_symbols |= node.program.symbols
         scope = node.program.locals.to_h { |name| [name, :nil] }
         statements = node.program.statements.map { |part| validate_statement(part, scope) }
         type = statements.any? { |part| type_of(part, scope) == :never } ? :never : :boolean
@@ -635,7 +642,7 @@ module Rubast
              IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise,
              IR::ExceptionValue, IR::CallError, IR::ArgumentCopy, IR::ParameterArray, IR::ParameterHash,
              IR::ArgumentEvaluation, IR::BlockPass, IR::ConstantGet, IR::ConstantSet, IR::NamespaceBody,
-             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad, IR::IOReference
+             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad, IR::IOReference, IR::Reflection
           node.result_type
         end
       end

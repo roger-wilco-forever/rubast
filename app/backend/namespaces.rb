@@ -45,11 +45,11 @@ module Rubast
         caller = location(node.span)
         saved = block_environment
         @receiver = nil
-        @frame_name = "<#{node.kind}:#{node.name.to_s.split('::').last}>"
+        @frame_name = "<#{node.kind}:#{node.label || node.name.to_s.split('::').last}>"
         @block_depth = 0
         traced_result([caller], lines) do |parts|
           inline_locals(node.locals, {}, parts)
-          # The allocation is the first expression; self becomes available after it executes.
+          # The first expression allocates a new namespace or reads the reopened class/module object.
           first, *rest = node.body.expressions
           @receiver = emit_value(emit_expression(first, parts), parts)
           body = node.body.with(expressions: rest.freeze)

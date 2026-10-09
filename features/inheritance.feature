@@ -317,7 +317,6 @@ Feature: Inherit instance methods while preserving Ruby lookup
       | class Child < Object; end                                                                                             |
       | class Child < String; end                                                                                             |
       | class Base; end; class Child < Base.new; end                                                                           |
-      | class Base; end; class Child < Base; end; class Child < Base; end                                                      |
       | class Base; end; class Child < Base; def value; super; end; end                                                        |
       | class Base; def value; self.value; end; end; class Child < Base; end                                                    |
       | class Base; def value; helper; end; def helper; 1; end; end; class Child < Base; def helper; value; end; end; Child.new.value |

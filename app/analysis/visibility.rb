@@ -15,7 +15,7 @@ module Rubast
         end
 
         def validate_declaration(node, locals)
-          unsupported(node) if node.safe_navigation
+          check_namespace_declaration(node)
           return validate_attributes(node, locals) if %i[attr_reader attr_writer attr_accessor].include?(node.name)
 
           owner, visibility = visibility_target(node)
@@ -78,7 +78,9 @@ module Rubast
         end
 
         def declaration_names(names, span, locals)
-          values = names.map { |name| IR::SymbolLiteral.new(value: name.to_s.encode(Encoding::UTF_8), span: span) }
+          values = names.map do |name|
+            IR::SymbolLiteral.new(value: name.to_s.encode(Encoding::UTF_8), span: span)
+          end
           validate_array(IR::ArrayLiteral.new(elements: values.freeze, result_type: nil, span: span), locals)
         end
       end
@@ -99,6 +101,7 @@ module Rubast
         end
 
         def attribute_methods(name, node)
+          @source_symbols |= ["@#{name}"]
           span = node.span
           read = IR::InstanceRead.new(name: :"@#{name}", result_type: nil, span: span)
           value = IR::LocalRead.new(name: :value, span: span)
@@ -127,6 +130,24 @@ module Rubast
 
       private
 
+      def check_namespace_declaration(node)
+        unsupported(node) if node.safe_navigation || !direct_namespace_declaration?(node)
+      end
+
+      def direct_namespace_declaration?(node)
+        unconditional_declaration?(@namespace_declaration, node)
+      end
+
+      def unconditional_declaration?(part, node)
+        return true if part.equal?(node)
+        return part.any? { |child| unconditional_declaration?(child, node) } if part.is_a?(Array)
+        return false unless part.is_a?(Data)
+        return false if [IR::Conditional, IR::Loop, IR::Protected, IR::MethodDefinition,
+                         IR::ClassDefinition, IR::Block].any? { |kind| part.is_a?(kind) }
+
+        part.to_h.except(:span).values.any? { |child| unconditional_declaration?(child, node) }
+      end
+
       def record_method_visibility(owner, method)
         default = @default_visibility.fetch(owner, :public)
         visibility = method.name == :initialize ? :private : default
@@ -144,15 +165,16 @@ module Rubast
       end
 
       def check_method_visibility(call, type, target)
-        return if implicit_visibility?(call, target)
+        unsupported(call) unless method_visible?(call, type, target)
+      end
+
+      def method_visible?(call, type, target)
+        return true if call.visibility == :send || implicit_visibility?(call, target)
 
         chain = method_ancestors(type.class_name)
-        visibility = chain.filter_map { |key| @visibilities.fetch(key, {})[call.name] }.first || :public
-        return if visibility == :public
-
-        return if visibility == :protected && protected_receiver?(chain, target ? target.first.key : type.class_name)
-
-        unsupported(call)
+        visibility = method_visibility(type, call.name) || :public
+        visibility == :public ||
+          (visibility == :protected && protected_receiver?(chain, target ? target.first.key : type.class_name))
       end
     end
   end

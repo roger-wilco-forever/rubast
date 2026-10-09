@@ -24,7 +24,7 @@ module Rubast
 
       def self.function(node, functions)
         key = [node.class_name, node.is_a?(IR::NewObject) ? :initialize : node.name,
-               node.parameters, dispatches(node.body)]
+               node.body.span, node.parameters, dispatches(node.body)]
         return functions.fetch(key).first if functions.key?(key)
 
         name = "method_#{functions.length}"
@@ -44,9 +44,10 @@ module Rubast
 
       def self.dispatch_signature(node, nested)
         case node
-        when IR::MethodCall then [[node.class_name, node.name, nested]]
-        when IR::NewObject then [[node.class_name, :initialize, nested]]
+        when IR::MethodCall then [[node.class_name, node.name, node.body.span, nested]]
+        when IR::NewObject then [[node.class_name, :initialize, node.body.span, nested]]
         when IR::Builtin then [[node.family, node.name, nested]]
+        when IR::Reflection then [[node.name, node.signature, nested]]
         when IR::CallError then [[node.class_name, node.message, node.label, node.span]]
         when IR::BlockInvocation then [[node.invocation.class_name, invocation_name(node.invocation),
                                         block_signature(node.invocation.body)]]
@@ -312,6 +313,7 @@ module Rubast
         include Exceptions
         include Objects
         include Namespaces
+        include Reflection
         include SourceMap::Emission
 
         def initialize(functions)
@@ -357,6 +359,7 @@ module Rubast
 
         def emit_mapped_expression(node, lines)
           case node
+          when IR::Reflection then emit_reflection(node, lines)
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue,
                IR::IOReference
             Rust.literal(node)

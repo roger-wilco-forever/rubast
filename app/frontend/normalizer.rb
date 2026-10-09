@@ -15,12 +15,26 @@ module Rubast
           @scopes = [{ names: ast.locals.to_h { |name| [name, name] }, block: false }]
           @scope_serial = 0
           IR::Program.new(statements: (ast.statements&.body || []).map { |node| normalize(node, source) }.freeze,
-                          locals: ast.locals.freeze, warnings: normalize_warnings(parsed, source))
+                          locals: ast.locals.freeze, warnings: normalize_warnings(parsed, source),
+                          symbols: source_symbols(ast))
         end
       end
 
       module Expressions
         private
+
+        def source_symbols(ast)
+          names = {}
+          pending = [ast]
+          until pending.empty?
+            node = pending.pop
+            names[node.name.to_s] = true if node.respond_to?(:name) && node.name.is_a?(Symbol)
+            names[node.unescaped] = true if node.is_a?(Prism::SymbolNode)
+            node.locals.each { |name| names[name.to_s] = true } if node.respond_to?(:locals)
+            pending.concat(node.child_nodes.compact)
+          end
+          names.keys.freeze
+        end
 
         def normalize_flow(node, source)
           case node

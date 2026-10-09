@@ -38,6 +38,7 @@ module Rubast
         end
 
         def composition_receiver(call, locals)
+          check_namespace_declaration(call)
           supported = [IR::SelfRead, IR::ConstantRead, IR::ConstantPath, IR::LocalRead]
           unsupported(call) if call.receiver && supported.none? { |kind| call.receiver.is_a?(kind) }
           receiver = validate_expression(call.receiver || IR::SelfRead.new(result_type: nil, span: call.span), locals)

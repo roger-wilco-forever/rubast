@@ -2,7 +2,6 @@
 
 module Rubast
   module IR
-    Program = Data.define(:statements, :locals, :warnings)
     SourceLoad = Data.define(:program, :name, :frames, :result_type, :span)
     ClassDefinition = Data.define(:name, :superclass, :definitions, :span, :kind, :locals) do
       def initialize(name:, superclass:, definitions:, span:, kind: :class, locals: [])
@@ -17,7 +16,9 @@ module Rubast
     ConstantGet = Data.define(:name, :result_type, :span)
     ConstantSet = Data.define(:name, :value, :result_type, :span)
     ClassValue = Data.define(:result_type, :span)
-    NamespaceBody = Data.define(:name, :kind, :receiver, :locals, :body, :result_type, :span)
+    NamespaceBody = Data.define(:name, :kind, :receiver, :locals, :body, :result_type, :span, :label) do
+      def initialize(label: nil, **attributes) = super
+    end
     ArgumentSplat = Data.define(:kind, :value, :span)
     Keywords = Data.define(:parts, :span)
     ArgumentCopy = Data.define(:kind, :value, :result_type, :span)
@@ -77,7 +78,6 @@ module Rubast
     BlockCall = Data.define(:call, :block, :result_type, :span)
     Iterator = Data.define(:exit_id, :name, :family, :receiver, :parameters, :locals, :steps, :result_type, :span)
     BlockStep = Data.define(:index, :body, :span)
-    Call = Data.define(:name, :receiver, :arguments, :safe_navigation, :span)
     Super = Data.define(:arguments, :forward_arguments, :block, :span) do
       def initialize(arguments:, forward_arguments:, span:, block: nil)
         super
@@ -85,7 +85,6 @@ module Rubast
     end
     IntegerLiteral = Data.define(:value, :span)
     StringLiteral = Data.define(:value, :frozen, :span)
-    SymbolLiteral = Data.define(:value, :span)
     HashLiteral = Data.define(:elements, :result_type, :span)
     ArrayLiteral = Data.define(:elements, :result_type, :span)
     Setter = Data.define(:call, :result_type, :span)
@@ -101,3 +100,5 @@ module Rubast
     Print = Data.define(:value, :result_type, :span)
   end
 end
+
+require_relative "ir/dynamic"

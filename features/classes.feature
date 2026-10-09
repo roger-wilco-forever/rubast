@@ -93,8 +93,6 @@ Feature: Stateless user classes
       | source                                                                         |
       | class Child < Object; def name; "child"; end; end                              |
       | class Stateful; def initialize; "init"; end; end; Stateful.new.initialize      |
-      | class Duplicate; def value; 1; end; def value; 2; end; end                     |
-      | class Reopened; def value; 1; end; end; class Reopened; def other; 2; end; end |
       | class String; def value; 1; end; end                                           |
       | class Greeter; def greet(name); name; end; end; puts Greeter.new.missing       |
       | class Greeter; def greet(name); name; end; end; puts Greeter.new               |
