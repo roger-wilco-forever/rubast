@@ -176,11 +176,19 @@ The unchanged supplied registry now matches CRuby. Additional cases exercise Chi
 
 **Verification:** `bin/verify` passed: RuboCop (68 files), 4 RSpec examples, 764 Cucumber scenarios (2,596 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Namespace, composition, prepend, visibility, declaration value/access, registry, and boundary scenarios execute accepted inputs against pinned CRuby. Existing unsupported fixtures were transferred to execution comparisons without changing their Ruby source; recursive-call source diagnostics retain their original location.
 
-### 15. Multiple source files — planned
+### 15. Multiple source files — complete (2026-10-09)
 
 Add `require_relative`, then restricted `require` on known paths. Build a source dependency graph while preserving load order, repeated loads, and circular-load behavior. Initially reject dynamically computed paths. Select real applications before claiming support for particular gems.
 
 **Acceptance:** each required file loads once; load-time side effects and constant availability match CRuby; diagnostics refer to the correct source file. Every dependency is validated before publishing a successful build.
+
+**Delivered:** static file-level require_relative, followed by restricted require with absolute or explicit ./ and ../ literal paths. The frontend loader coordinates the existing reader/parser/normalizer and builds nested source-load IR. A fresh canonical-path table preserves first-load order, repeats, symlink aliases, and circular in-progress loads. The entry script is not initially marked as required. Files keep independent local/block scopes, lexical constant definitions, frozen-string pragmas, and load-time warnings while sharing class/module values, constants, and object effects. All loaded files are validated before project writing; missing files receive E_LOAD at the require site, and parse/semantic diagnostics name the dependency.
+
+The backend reuses inline locals and traced closures, embeds all dependency behavior, and preserves true/false require results and required-file error frames. Standard require frames are captured from the pinned CRuby loader without executing application code; compiler-only wrappers are excluded. Accepted executions compare stdout, stderr, and status with CRuby, including Bundler and plain startup. A saved Cargo project builds/runs after deleting Ruby sources. [Multi-file quotes](../examples/workloads/multi_file_quote.rb) retain the unchanged [single-file quote](../examples/workloads/modular_quote.rb) output; the retained target/multi-file-quote-stage15 release binary also matches both Ruby entries when launched from /tmp.
+
+**Boundary:** loading is limited to unconditional file-level statements, local assignments, and direct puts/p arguments. Paths are literal UTF-8 strings with a .rb extension or no extension. Explicit relative require uses compilation cwd; require_relative uses the requiring file's real directory. Dependencies are compilation snapshots. Computed paths, conditional/method/block/namespace-body loads, load/autoload, load-path and gem discovery, native extensions, mutable loaded-feature state, and custom host loader wrappers need separate contracts. No gem compatibility is claimed. Existing class reopening, dynamic dispatch, range/shape, and allocation limits remain unchanged.
+
+**Verification:** bin/verify passed: RuboCop (74 files), 5 RSpec examples, 807 Cucumber scenarios (2,804 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). [Loading scenarios](../features/source_loading.feature) cover execution and diagnostics, including normalized path/extension order, user methods with loader names, host module lookup, and lexical Kernel shadowing. The loader service test confirms per-compilation state and rereads changed dependencies. All five retained project files match the final emission byte-for-byte.
 
 ### 16. Practical I/O — planned
 
@@ -212,4 +220,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Begin stage 15 with require_relative on static paths. Preserve Ruby load order, one-time loading, file-local scopes, lexical constant lookup, and source locations across files. Add repeated and circular loads, nested namespace dependencies, load-time effects, and rejected dynamic paths before supporting restricted require on known paths. Validate every loaded dependency before emission, then split a supported workload into multiple files without changing its behavior. Commit and push stage 14 before starting this work.
+Begin stage 16 with print and warn, then standard stream objects and basic text-file operations. Define argument evaluation, newline behavior, encodings, EOF, missing files, and I/O errors through differential scenarios before accepting each API. Reuse stage 12 exception flow and retain the static loading boundary. Commit and push stage 15 before starting this work.

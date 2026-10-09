@@ -5,6 +5,21 @@ module Rubast
     module Namespaces
       private
 
+      def emit_source_load(node, lines)
+        frames = [location(node.span), *node.frames.map { |span, label| location(span, label) }]
+        saved = block_environment
+        @frame_name = "<top (required)>"
+        @block_depth = 0
+        traced_result(frames, lines) do |parts|
+          node.program.warnings.each { |warning| parts << "    eprintln!(\"{}\", #{Rust.rust_string(warning)});" }
+          inline_locals(node.program.locals, {}, parts)
+          node.program.statements.each { |statement| emit_statement(statement, parts) }
+          "Value::Bool(true)"
+        end
+      ensure
+        restore_block_environment(saved)
+      end
+
       def method_label(node)
         name = node.is_a?(IR::NewObject) ? :initialize : node.name
         owner = node.class_name
@@ -13,6 +28,8 @@ module Rubast
       end
 
       def emit_namespace(node, lines)
+        return emit_source_load(node, lines) if node.is_a?(IR::SourceLoad)
+
         return emit_object(node.call, lines, assignment: true) if node.is_a?(IR::Setter)
         return emit_value("runtime.new_object()", lines) if node.is_a?(IR::ClassValue)
         return emit_value("runtime.constant(#{Rust.rust_string(node.name.to_s)})", lines) if node.is_a?(IR::ConstantGet)

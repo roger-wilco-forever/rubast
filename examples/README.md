@@ -1,14 +1,14 @@
 # Example programs
 
-Each file is a standalone Ruby program. Run it independently rather than loading all examples into one Ruby process. Examples and reference outputs target the pinned CRuby version in `.ruby-version`.
+Each entry file is an independent Ruby program. Run it separately rather than loading all examples into one Ruby process. The quote_app directory contains dependencies for multi_file_quote.rb. Examples and reference outputs target the pinned CRuby version in `.ruby-version`.
 
 The small examples at the root demonstrate supported constructs: [interactive input](hello_user.rb), [instance calls](greeter.rb), [conditions and arithmetic](number_label.rb), [object references and cycles](linked_names.rb), [bounded loops](bounded_counter.rb), [shared arrays and mutable strings](shared_collections.rb), [ordered definition storage](definition_store.rb), [batch invoice totals](batch_totals.rb), [user-method invoice batch traversal](yielding_batch.rb), [first large invoice with an early block exit](first_large_invoice.rb), [invoice labels with block next values](invoice_labels.rb), [invoice search with a nonlocal block return](invoice_search.rb), and [recoverable price quotes with retry and cleanup](recoverable_quote.rb), and [configurable quotes with defaults, rest, keywords, and forwarded callbacks](configurable_quotes.rb).
 
 ## Realistic workload corpus
 
-The programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All eight run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The entry programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All nine run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after completion of stage 14 on 2026-10-09:
+Observed after completion of stage 15 on 2026-10-09:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
@@ -19,7 +19,8 @@ Observed after completion of stage 14 on 2026-10-09:
 | [notification.rb](workloads/notification.rb) | Select email or SMS from stdin, then call the chosen channel | `E_UNSUPPORTED`, line 25 | Join of different object handles in a conditional | Object unions and receiver lookup after a join; outside the current stage-6 contract |
 | [unit_pricing.rb](workloads/unit_pricing.rb) | Divide a subtotal by quantity and return a message for an invalid quantity | Matches CRuby | None on the supplied fixture | Possible zero division is a checked runtime error; nonzero results still require the existing `i64` proof |
 | [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | Matches CRuby | None on the unchanged supplied fixture | Additional acceptance cases cover inherited class receivers, fallback, clear/add, and nested collection aliases |
-| [modular_quote.rb](workloads/modular_quote.rb) | Nested shop namespaces, tax helpers, prepended loyalty discount, accessors, inherited class factory, and callback | Matches CRuby | None on the supplied fixture | Static namespace composition only; dynamic modifications and multiple source loading remain outside the subset |
+| [modular_quote.rb](workloads/modular_quote.rb) | Nested shop namespaces, tax helpers, prepended loyalty discount, accessors, inherited class factory, and callback | Matches CRuby | None on the supplied fixture | Static namespace composition only; dynamic modifications remain outside the subset |
+| [multi_file_quote.rb](workloads/multi_file_quote.rb) | The same quote behavior split into namespaced dependency files | Matches CRuby and the single-file fixture | None on the supplied fixture | Static file-level loading; reopening and dynamic loading remain outside the subset |
 
 The first diagnostic can hide subsequent blockers. For example, accepting array syntax would not make Symbol-to-Proc aggregation work automatically. The notification example exercises object-result joins even though its syntax already normalizes successfully. Keep these programs intact when implementing support; do not remove useful constructs merely to turn a row green.
 
@@ -81,6 +82,17 @@ target/modular-quote-stage14/target/release/rubast_program
 
 ## Track progress
 
+The multi-file quote entry requires preferred_quote, which requires quote, which requires shop. Qualified class declarations keep the namespace shared without reopening it; modules retain the lexical tax constant from shop.rb. Its output matches the unchanged modular_quote.rb fixture:
+
+```sh
+bundle exec ruby bin/rubast run examples/workloads/multi_file_quote.rb
+bundle exec ruby bin/rubast emit-rust examples/workloads/multi_file_quote.rb -o target/multi-file-quote-stage15
+cargo build --release --manifest-path target/multi-file-quote-stage15/Cargo.toml
+target/multi-file-quote-stage15/target/release/rubast_program
+```
+
+[Loading scenarios](../features/source_loading.feature) compare file order, cycles, aliases, scope, warnings, and errors with CRuby, and independently build/run a project after deleting its Ruby source files.
+
 [The Cucumber corpus](../features/realistic_examples.feature) checks invoice and shipping execution against CRuby and pins reference outputs for every program. Currently unsupported cases assert the diagnostic code, Ruby line, and absence of an emitted project. Their tag allows focused checks:
 
 ```sh
@@ -90,4 +102,4 @@ bundle exec cucumber --publish-quiet features/realistic_examples.feature --tags 
 
 The suite is expected to pass while three Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
 
-This corpus supplements the agreed roadmap; it does not reorder stages or complete them. The files remain self-contained while multiple-source compilation is planned, so the one-class-per-file lint rule is exempted only for this workload directory.
+This corpus supplements the agreed roadmap; it does not reorder stages or complete them. Original fixtures remain self-contained and unchanged. The one-class-per-file lint exemption applies only to workload entry files; the multi-file application's qualified class declarations retain their actual lexical nesting through a narrowly scoped lint exemption.

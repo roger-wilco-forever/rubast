@@ -4,7 +4,17 @@ require "open3"
 require "timeout"
 
 module RubastProgramExecution
-  def capture_program(*command, stdin_data: "", timeout: 30, **)
+  def capture_ruby_source(*)
+    capture_program(@program_environment || {}, RbConfig.ruby, *, stdin_data: @stdin_data.to_s,
+                                                                  unbundled: @unbundled_startup,
+                                                                  chdir: @program_directory || Dir.pwd)
+  end
+
+  def capture_program(*command, stdin_data: "", timeout: 30, unbundled: false, **)
+    if unbundled
+      return Bundler.with_unbundled_env { capture_program(*command, stdin_data: stdin_data, timeout: timeout, **) }
+    end
+
     Open3.popen3(*command, **, pgroup: true) do |input, output, errors, process|
       readers = [output, errors].map { |stream| Thread.new { stream.read } }
       begin

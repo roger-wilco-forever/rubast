@@ -5,11 +5,45 @@ Given("the Ruby source is:") do |source|
   File.write(@source_path, source)
 end
 
+Given("the Ruby file {string} is:") do |name, source|
+  path = File.join(@workdir, name)
+  FileUtils.mkdir_p(File.dirname(path))
+  File.write(path, source)
+end
+
+Given("the working directory is the source directory") do
+  @program_directory = @workdir
+end
+
+Given("the program environment excludes Bundler startup") do
+  @unbundled_startup = true
+  paths = Gem.loaded_specs.values.map(&:base_dir).uniq.join(File::PATH_SEPARATOR)
+  @program_environment = { "GEM_PATH" => paths }
+end
+
+Given("the Ruby source with absolute paths is:") do |source|
+  @source_path = File.join(@workdir, "example.rb")
+  File.write(@source_path, source.gsub("<source_directory>", @workdir))
+end
+
+Given("the file {string} links to {string}") do |name, target|
+  File.symlink(target, File.join(@workdir, name))
+end
+
+When("I record CRuby execution") do
+  @ruby_reference = capture_ruby_source(@source_path)
+end
+
+When("I remove the Ruby source files") do
+  Dir.glob(File.join(@workdir, "**/*.rb")).each { |path| File.delete(path) }
+end
+
 When("I emit a Rust project") do
   @output_path ||= File.join(@workdir, "output project")
   executable = File.expand_path("../../bin/rubast", __dir__)
   @rubast_stdout, @rubast_stderr, @rubast_status =
-    Open3.capture3(@emit_environment || {}, RbConfig.ruby, executable, "emit-rust", @source_path, "-o", @output_path)
+    Open3.capture3(@emit_environment || {}, RbConfig.ruby, executable, "emit-rust", @source_path, "-o", @output_path,
+                   chdir: @program_directory || Dir.pwd)
 end
 
 Then("the emitted project contains its source and runtime") do
@@ -80,11 +114,11 @@ end
 When("I run Rubast") do
   executable = File.expand_path("../../bin/rubast", __dir__)
   @rubast_stdout, @rubast_stderr, @rubast_status =
-    capture_program(RbConfig.ruby, executable, "run", @source_path, stdin_data: @stdin_data.to_s)
+    capture_ruby_source(executable, "run", @source_path)
 end
 
 Then("stdout, stderr, and exit status match CRuby") do
-  ruby_stdout, ruby_stderr, ruby_status = capture_program(RbConfig.ruby, @source_path, stdin_data: @stdin_data.to_s)
+  ruby_stdout, ruby_stderr, ruby_status = @ruby_reference || capture_ruby_source(@source_path)
   expect(@rubast_stdout).to eq(ruby_stdout)
   expect(@rubast_stderr).to eq(ruby_stderr)
   expect(@rubast_status.exitstatus).to eq(ruby_status.exitstatus)
@@ -95,6 +129,10 @@ Then("the diagnostic has code {string} at line {int}") do |code, line|
   expect(@rubast_stdout).to eq("")
   expect(@rubast_stderr).to include(code)
   expect(@rubast_stderr).to match(/:#{line}:\d+/)
+end
+
+Then("the diagnostic names Ruby file {string}") do |name|
+  expect(@rubast_stderr).to include("#{File.join(@workdir, name)}:")
 end
 
 Given("I use the example {string}") do |filename|

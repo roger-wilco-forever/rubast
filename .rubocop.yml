@@ -14,10 +14,16 @@ Style/StringLiterals:
 Style/Documentation:
   Enabled: false
 
-# Each workload is a standalone compilation unit until require_relative is supported.
+# The original workloads intentionally retain their standalone Ruby sources.
 Style/OneClassPerFile:
   Exclude:
     - "examples/workloads/*.rb"
+
+# Qualified declarations avoid reopening Shop and preserve their actual lexical nesting.
+Style/ClassAndModuleChildren:
+  Exclude:
+    - "examples/workloads/quote_app/quote.rb"
+    - "examples/workloads/quote_app/preferred_quote.rb"
 
 # Preserve the supplied registry example's explicit readers and array syntax.
 Style/TrivialAccessors:

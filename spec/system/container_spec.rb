@@ -7,6 +7,7 @@ RSpec.describe Rubast::Container do
   it "resolves every compiler stage through dry-system" do
     expect(described_class["compiler"]).to be_a(Rubast::Compiler)
     expect(described_class["source.reader"]).to be_a(Rubast::Source::Reader)
+    expect(described_class["frontend.loader"]).to be_a(Rubast::Frontend::Loader)
     expect(described_class["frontend.parser"]).to be_a(Rubast::Frontend::Parser)
     expect(described_class["frontend.normalizer"]).to be_a(Rubast::Frontend::Normalizer)
     expect(described_class["analysis.validator"]).to be_a(Rubast::Analysis::Validator)

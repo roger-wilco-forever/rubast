@@ -3,6 +3,7 @@
 module Rubast
   module IR
     Program = Data.define(:statements, :locals, :warnings)
+    SourceLoad = Data.define(:program, :name, :frames, :result_type, :span)
     ClassDefinition = Data.define(:name, :superclass, :definitions, :span, :kind, :locals) do
       def initialize(name:, superclass:, definitions:, span:, kind: :class, locals: [])
         super

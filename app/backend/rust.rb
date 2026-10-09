@@ -356,7 +356,7 @@ module Rubast
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
             Rust.literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead,
-               IR::Setter, IR::ConstantGet, IR::ConstantSet, IR::ClassValue, IR::NamespaceBody
+               IR::Setter, IR::ConstantGet, IR::ConstantSet, IR::ClassValue, IR::NamespaceBody, IR::SourceLoad
             emit_variable(node, lines)
           when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"

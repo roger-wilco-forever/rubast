@@ -4,10 +4,10 @@ Rubast is an experimental ahead-of-time compiler from Ruby to Rust. The compiler
 
 **Status:** a small Ruby subset works end to end: `nil`, booleans, signed 64-bit integers, UTF-8 strings, local variables, `gets`, safe `chomp`, interpolation, `puts`, user classes and modules with nested constants, class methods, static composition, visibility, attributes, object references, and nested calls, scalar conditions, comparisons, bounded integer arithmetic, method returns, `while`/`until` loops, arrays, mutable strings, symbols, hashes, bounded inline `each`/`times`/`map` blocks, and literal blocks passed to user instance methods with `yield`. Unsupported syntax produces a source diagnostic.
 
-The proposed pipeline is:
+The pipeline is:
 
 ```text
-Ruby source → Prism (Ruby API) → semantic IR (Ruby) → generated Rust + Rust runtime → Cargo binary
+Ruby source files → Prism (Ruby API) → semantic IR (Ruby) → generated Rust + Rust runtime → Cargo binary
 ```
 
 Ruby and Prism are needed to run the compiler. Its Ruby services are assembled with `dry-system` and loaded with Zeitwerk. Acceptance behavior is specified with Cucumber; compiler components are checked with RSpec. The compiled program uses the Rust runtime linked into its binary.
@@ -42,6 +42,14 @@ target/greeter/target/debug/rubast_program
 ```
 
 `emit-rust` does not invoke Cargo or execute the Ruby program. The output includes `Cargo.toml`, `src/main.rs`, and the runtime source; runtime build caches are excluded. Existing nonempty destinations are rejected with `E_OUTPUT`. Compiler and output errors exit with status 2; invalid command usage exits with status 64. `run` continues to build and execute in a temporary directory that is removed afterward.
+
+Multiple Ruby files support `require_relative "path"` and restricted `require "./path"`, `require "../path"`, or an absolute literal path. Loading is restricted to unconditional file-level statements, local assignments, and direct `puts`/`p` arguments. Paths must be literal UTF-8 strings with a `.rb` filename extension or no filename extension (which adds `.rb`). Dependencies load in source order with independent file-local scopes, shared constants/object state, defining lexical namespaces, and their own frozen-string pragmas and warnings. Repeated and circular requires return `false`; a completed first load returns `true`. Symlink aliases share one loaded-file identity, and `require_relative` resolves from the requiring file's real directory. The command-line entry is not initially a loaded feature, matching CRuby.
+
+Source dependencies are resolved and validated during compilation and embedded in the generated Rust. Explicit relative `require` paths use the compiler's working directory; the emitted binary needs no Ruby source files and can run from another directory. Missing dependencies produce `E_LOAD` at their require site; parse/semantic errors retain the dependency's path and Ruby location. Computed paths, conditional/method/block/namespace-body loading, `load`, `autoload`, load-path/gem lookup, native extensions, and mutable loaded-feature state remain unsupported. No gem compatibility is claimed. See [loading scenarios](features/source_loading.feature) and [the multi-file quote application](examples/workloads/multi_file_quote.rb).
+
+User methods with loader names retain ordinary instance/singleton lookup, module host dispatch, and lexical constants. Loading restrictions apply to the built-in Kernel APIs.
+
+Paths are normalized before resolving Ruby extensions, preserving terminal dot/slash aliases and the literal hidden filename `.rb`.
 
 User classes support `Class.new` with supported arguments passed to `initialize`, or no arguments when no initializer is defined. Instance methods accept required and optional positional arguments, named `*args`, required and optional keywords, named `**kwargs`, and named `&block`. Instance variables hold `nil`, booleans, integers, strings, or object handles; unset fields read as `nil`. Object aliases share mutations, while separate instances have independent state. `new` returns the object regardless of the initializer's ordinary result. Method bodies support expression sequences, local assignment, and `puts`. The final expression's value is returned; empty bodies and built-in `puts` return `nil`. Methods can call helpers using `self.method` or an implicit receiver, including methods defined later in the same class. `self` may also be assigned to a method local for alias calls. Implicit user methods take precedence over built-in `gets` and `puts`. Generated Rust shares receiver functions when resolved nested calls agree; object-dependent lookup emits separate variants when needed. Functions receive runtime, receiver, and supported value arguments. See [the class example](examples/greeter.rb):
 

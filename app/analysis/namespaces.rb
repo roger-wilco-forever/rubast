@@ -209,16 +209,39 @@ module Rubast
       private
 
       def validate_namespace_reference(node, locals)
+        return validate_source_load(node) if node.is_a?(IR::SourceLoad)
+
         node.is_a?(IR::Setter) ? validate_setter(node, locals) : validate_constant_read(node)
       end
 
       def validate_builtin_call(node, locals)
+        validate_loading_call(node) if %i[require_relative require load autoload].include?(node.name)
         return validate_declaration(node, locals) if declaration_call?(node)
         return validate_composition(node, locals) if composition_call?(node)
         return validate_kernel_call(node, locals) if node.receiver.nil? && %i[puts p raise fail].include?(node.name)
         return IR::GetLine.new(span: node.span) if gets_call?(node)
 
         nil
+      end
+
+      def validate_loading_call(node)
+        return unless kernel_load_receiver?(node)
+        return if @checking_unused && implicit_load_receiver?(node) &&
+                  unbound_module_owner?(@receiver_type.class_name)
+        return if node.receiver.is_a?(IR::SelfRead) && implicit_method?(node.with(receiver: nil))
+
+        raise CompilationError.new(code: "E_LOAD", message: "loading requires an unconditional file-level site",
+                                   span: node.span)
+      end
+
+      def implicit_load_receiver?(node)
+        node.receiver.nil? || node.receiver.is_a?(IR::SelfRead)
+      end
+
+      def kernel_load_receiver?(node)
+        return true if implicit_load_receiver?(node)
+
+        node.receiver.is_a?(IR::ConstantRead) && node.receiver.name == :Kernel && !resolve_constant(node.receiver)
       end
 
       def existing_constant?(name)

@@ -4,7 +4,7 @@ require_relative "../system/import"
 
 module Rubast
   class Compiler
-    include Import["source.reader", "frontend.parser", "frontend.normalizer",
+    include Import["frontend.loader",
                    "analysis.validator", "backend.rust", "build.cargo", "build.writer"]
 
     def call(path)
@@ -18,9 +18,7 @@ module Rubast
     private
 
     def generate(path)
-      source = reader.call(path)
-      parsed = parser.call(source)
-      syntax = normalizer.call(parsed, source)
+      syntax = loader.call(path)
       semantic = validator.call(syntax)
       rust.call(semantic)
     end

@@ -13,7 +13,8 @@ The container knows component implementations and keys. Services receive depende
 ```text
 CLI
   → Compiler
-  → SourceReader → PrismParser → Normalizer → Validator/Analyzer
+  → SourceLoader (SourceReader → PrismParser → Normalizer for each dependency)
+  → Validator/Analyzer
   → RustEmitter → GeneratedProject
   → ProjectWriter (emit-rust directly, or through CargoRunner for run)
   → CargoRunner (run only)
@@ -26,6 +27,7 @@ Target contract: each `Compiler#call(request)` gets a separate `CompilationConte
 | SourceReader | Path and options | `SourceFile` with bytes and file path |
 | PrismParser | `SourceFile` | Prism parse result containing AST and warnings, or parse diagnostics |
 | Normalizer | Prism parse result and `SourceFile` | Syntax IR with Ruby spans, lexical locals, and default-level warning text |
+| SourceLoader | Entry path | Syntax IR with nested source dependencies and per-file locals/warnings; repeated/circular loads return false |
 | Validator/Analyzer | Syntax IR | Validated semantic IR |
 | RustEmitter | Validated IR | Rust files, Cargo manifest, source map |
 | CargoRunner | Generated project | Binary path, stdout/stderr, and exit status |
@@ -35,7 +37,7 @@ Expected user errors become structured diagnostics with codes and Ruby spans. Un
 ## Container rules
 
 - `Rubast::Container < Dry::System::Container` lives in `system/container.rb`. `Rubast::Import = Rubast::Container.injector` lives in `system/import.rb`. The container configures `use :zeitwerk` and component directories.
-- Only services under `app/` are auto-registered. IR nodes, diagnostics, and request values live under `lib/rubast/` outside the container. The `app/` root constant namespace is `Rubast`, while keys follow paths: `source.reader`, `frontend.parser`, `frontend.normalizer`, `analysis.validator`, `backend.rust`, `build.writer`, `build.cargo`, and `compiler`. For example, `app/frontend/parser.rb` defines `Rubast::Frontend::Parser`.
+- Only services under `app/` are auto-registered. IR nodes, diagnostics, and request values live under `lib/rubast/` outside the container. The `app/` root constant namespace is `Rubast`, while keys follow paths: `source.reader`, `frontend.parser`, `frontend.normalizer`, `frontend.loader`, `analysis.validator`, `backend.rust`, `build.writer`, `build.cargo`, and `compiler`. For example, `app/frontend/parser.rb` defines `Rubast::Frontend::Parser`.
 - Services express dependencies through constructors. [Auto-injection](https://hanakai.org/learn/dry/dry-system/v1.2/dependency-auto-injection) is allowed at the orchestration layer; stage algorithms and IR do not know about the container.
 - Introduce [providers](https://hanakai.org/learn/dry/dry-system/v1.2/providers) for resources with a `prepare/start/stop` lifecycle. An ordinary `cargo` invocation is an adapter call, not a long-lived provider.
 - Choose memoization explicitly for each component. Never share mutable per-compilation state between runs.

@@ -369,7 +369,8 @@ module Rubast
 
         def validate_variable(node, locals)
           case node
-          when IR::Setter, IR::ConstantRead, IR::ConstantPath then validate_namespace_reference(node, locals)
+          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad
+            validate_namespace_reference(node, locals)
           when IR::SelfRead
             unsupported(node) unless @receiver_type
             node.with(result_type: @receiver_type)
@@ -528,7 +529,7 @@ module Rubast
           case node
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
             validate_literal(node)
-          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::LocalRead, IR::LocalWrite,
+          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad, IR::LocalRead, IR::LocalWrite,
                IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
           when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit, IR::Protected, IR::Retry, IR::CallError
@@ -584,6 +585,13 @@ module Rubast
 
       private
 
+      def validate_source_load(node)
+        scope = node.program.locals.to_h { |name| [name, :nil] }
+        statements = node.program.statements.map { |part| validate_statement(part, scope) }
+        type = statements.any? { |part| type_of(part, scope) == :never } ? :never : :boolean
+        node.with(program: node.program.with(statements: statements.freeze), result_type: type)
+      end
+
       def validate_invocation(node, method, locals, receiver, owner:)
         method ||= default_initializer(node)
         arguments, parameters, bindings = prepare_arguments(node, method, locals, owner: owner || :BasicObject)
@@ -630,7 +638,7 @@ module Rubast
              IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise,
              IR::ExceptionValue, IR::CallError, IR::ArgumentCopy, IR::ParameterArray, IR::ParameterHash,
              IR::ArgumentEvaluation, IR::BlockPass, IR::ConstantGet, IR::ConstantSet, IR::NamespaceBody,
-             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck
+             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad
           node.result_type
         end
       end
