@@ -173,13 +173,13 @@ target/linked-names/target/release/rubast_program
 # true
 ```
 
-Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run`, `build`, `emit-rust`, and `dump-ir`; measured optimization and selected dynamic language behavior remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
+Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run`, `build`, `emit-rust`, and `dump-ir`; selected dynamic language behavior remains planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
 
 For application-shaped examples, see the [workload corpus and blocker table](examples/README.md): invoice payments, shipping policies, guarded unit pricing, the unchanged class-owned registry, modular quotes, and UTF-8 receipt export currently compile; streaming logs, shopping-cart aggregation, and notification configuration still expose analysis limits and planned features. Every example has an executable CRuby reference; unsupported examples intentionally remain rejected by Rubast.
 
 See [the architecture and implementation plan](docs/architecture.md), [proposed technology stack](docs/technology-stack.md), and [contributor and agent development guide](docs/development.md). Documentation and Cucumber scenarios are written in English.
 
-## Preliminary benchmarks
+## Benchmarks
 
 The [synthetic baseline](docs/benchmarks.md) compares CRuby with emitted release binaries on arithmetic, conditions, method calls, instance fields, and strings. It records process execution time, peak RSS, separate generation/build costs, and raw samples. These measurements establish whether the current AOT approach improves repeated process runs and where further work is justified.
 
@@ -189,5 +189,11 @@ python3 benchmarks/synthetic.py
 ```
 
 The runner requires Python 3 and Linux with GNU `/usr/bin/time`, in addition to the compiler toolchain. The output directory must not exist. Each workload's output, errors, and exit status must match CRuby before timing. Compiler checks should run separately from benchmarks to avoid competing load. See the report for measurement conditions and the limits of startup-heavy, unrolled workloads.
+
+The [stage-18 application benchmark](docs/practical-benchmarks.md) measures one million quote calculations, invoice summaries, and receipt labels, with a separate startup control. It records fresh generation/release builds, binary size, peak process RSS, and paired baseline/optimized timings. A targeted interpolation change removes intermediate String copies while preserving frozen/shared values. Sustained execution does not yet beat CRuby on these programs; startup and process-memory benefits remain distinct from throughput.
+
+```sh
+python3 benchmarks/practical.py --output target/practical-current
+```
 
 No license has been selected yet.

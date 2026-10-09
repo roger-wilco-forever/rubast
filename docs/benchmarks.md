@@ -1,5 +1,7 @@
 # Preliminary synthetic benchmark — 2026-10-07
 
+For current sustained application workloads and the stage-18 optimization, see [the practical benchmark](practical-benchmarks.md). This page preserves the original stage-5 experiment.
+
 ## Why we are measuring
 
 Rubast explores compiling a useful Ruby subset into standalone native programs: faster startup and execution for repeated runs, lower process memory, and deployment without a Ruby interpreter. This baseline checks whether the current implementation already provides those benefits and records evidence for later optimization. It compares CRuby with **Rubast's emitted Rust**, including its current runtime and cloning, rather than hand-written Rust.

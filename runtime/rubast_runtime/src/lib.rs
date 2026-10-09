@@ -465,7 +465,10 @@ impl Runtime {
     pub fn interpolate(parts: Vec<Value>) -> Value {
         let mut text = String::new();
         for part in parts {
-            text.push_str(&part.into_ruby_string());
+            match part {
+                Value::String(part) => text.push_str(&part.borrow()),
+                part => text.push_str(&part.into_ruby_string()),
+            }
         }
         Value::from(text)
     }

@@ -1,0 +1,489 @@
+{
+  "date_utc": "2026-10-09T08:46:55.105637+00:00",
+  "compiler_commit": "763db4bf0c4376982e91a4cbf48d9326bd07d125",
+  "compiler_dirty": true,
+  "runner_sha256": "c5f3d712cc307d92a698fcdaeb4e43e21696310adb9ca22891e3bb543bda540c",
+  "sources": {
+    "app/analysis/arguments.rb": "fc9b76cd90a29c23115722a84e79b22d0e2fe683f166a10c0aa7b67e7ef69cf8",
+    "app/analysis/block_arguments.rb": "fc8c115bc38b8067c80d5c58b042d581864a13112cde42574c85f2e77f36f03d",
+    "app/analysis/blocks.rb": "e657f8ddaf143a8f72656aa0dd591f6f905951a23dbab1623f6d92a34ab98b92",
+    "app/analysis/call_arguments.rb": "492306389fc101839621394d97ef0faf0c900075ed228979d53e43bc46277905",
+    "app/analysis/collections.rb": "80fc09130496e0295cfd34c8f1a0d2688ad57735013a0223109929e1a02f53a4",
+    "app/analysis/exceptions.rb": "fb82aaaba159ebf92e2ea41a6521e2018746057343e64a0d41ae611ca7c8e130",
+    "app/analysis/hashes.rb": "a4e62ecb4a6c2c879aa656dd100929a5f2a3094f72614747eb5f0af3ab3fd5ce",
+    "app/analysis/iterators.rb": "f7db1721b7b5f7c6146f7bae0a75edc7bef1152f220fa731c710dea39c6c63fb",
+    "app/analysis/loop_analysis.rb": "d095b37161e5e425c98a51bf8c86479bb78f186f4b24ebe98902cac6f1652998",
+    "app/analysis/modules.rb": "c68ad78138883ca67d63f4906b1bf5272b7092f400efc649e44b1766d115fc6d",
+    "app/analysis/namespaces.rb": "33465330d1383dc6a306166214223c57388a0519ef3ddd1dccde12e2520f257a",
+    "app/analysis/registry_operations.rb": "2b287b93cf1def56f8b5ab77da5be30b427de7d4c5a0d5b2eb4f4c2357b70c90",
+    "app/analysis/text_io.rb": "f96a178c7ef7fa26672078006255bf621c242c276691d66728b8b6d845e0ba6d",
+    "app/analysis/validator.rb": "c81d03e4d5ccfee9af8044e58db773f511554f6d7a8ceeeaf88414f2d8528b48",
+    "app/analysis/visibility.rb": "bb58724b115e9d1e9dc2e1d3980665755f4b84c58849a5146eeb3a8f36d61a0e",
+    "app/backend/blocks.rb": "2931ec6edbf18045ca2743b68605708ad4a5ad30c9971b31a89f2c7f84f66528",
+    "app/backend/exceptions.rb": "b179681a9ef79859d73d328706aadb6c79d8241f17d3d730bd1c1d818e86edeb",
+    "app/backend/iterators.rb": "c9d4b03e31a7a2cf29efc185fd4b7434e850a54ece5c616e96196ea7582cbb87",
+    "app/backend/namespaces.rb": "7c1b4c95952c977cfd43bc6594f85a9e0b8350a5c6a27fb2a8b272e2662073a0",
+    "app/backend/rust.rb": "aa05a92c41bfb96f6d0a47e221eed8b27fcf09c5a5f6c7c6c9f699a8cbeddfc6",
+    "app/backend/source_map.rb": "3383cf2ff4d1deddf50746377ce316583cefddd446c3ece381af2a081a7be1c8",
+    "app/build/cargo.rb": "1dd654be024745637642162b7c6a9a51f1a5c6664d1a0c1593ef78031faf3fef",
+    "app/build/diagnostics.rb": "c4f1110f0bc6bd264c242ca8e472689cebcaa12c3e3b16da7a6314daee150a38",
+    "app/build/writer.rb": "c4aab037ec48970554ef38d98299a4b9ba176c7f4e8d48cd627d1bcd2c7e985e",
+    "app/compiler.rb": "f0429b9d8526d62a419ead24a62cb3322bdcecd8e40feb9ea809a627e066b8ba",
+    "app/debug/ir.rb": "0d86788d9330db0b0c0a4183e0f31f363c679de01c58e8f0777dff9df3b2fbb7",
+    "app/frontend/arguments.rb": "d4f0c037b8d6859f6340803be0b12c754fb8dadade91ea76aa0aca57e43e6bcd",
+    "app/frontend/block_scopes.rb": "acaf9665a20907480b3ac27410107328085f03459130252ec4fcb5e37b8fc6d8",
+    "app/frontend/exceptions.rb": "344426b7a7717cfb69a004794a142d3b4ecb5a033bf9d754af055fce9d3c8c9d",
+    "app/frontend/loader.rb": "096ee5fae75c174c8ab9881678958e20afdc70c4e7723f1eeda96375a744fbb8",
+    "app/frontend/namespaces.rb": "d23a941b1425286e2a0a547936f93c989c79da96013d1891ebaffd5c910b65ca",
+    "app/frontend/normalizer.rb": "5851eb90cce5a28c02a4b67bc62bc1dff7cf7e453f5658e4359a6b9f92aff6c7",
+    "app/frontend/parser.rb": "cae2f9a07ff22d826b0224019f846df4a667948de6277b616d621072faa89055",
+    "app/source/reader.rb": "ff3c4da99d98e3739f6a50a23559d19f6c35e63d2871f6a3959d1fa789a99849",
+    "benchmarks/workloads/invoice_summaries.rb": "ffaff936226205a7393fc657e4c900973589d4c9cca179e97a3d4cdfe3213dab",
+    "benchmarks/workloads/quote_requests.rb": "2c728ff023fce051a2e1594ce67a69f0d75cafc52695f9b918fa8ba29491714c",
+    "benchmarks/workloads/receipt_labels.rb": "9fc01c6c5766915cfd19bfb8e93a7d2212f699b87e5a38dfa529be47dbf8a6af",
+    "benchmarks/workloads/startup.rb": "1c817deb34d9eefd0b989ee11edbce39abd902e247ce53651e8f1b093d870c2b",
+    "examples/workloads/class_definitions.rb": "f02ec9f32fd9846a34621b3348ffacbc818725f6d0fcb94c20d70dfc15fd9d75",
+    "examples/workloads/invoice.rb": "f59ae50cb54c0feb96f678ba6e423ab9aa13ec9e7da85054194044cad6a60811",
+    "examples/workloads/log_summary.rb": "77f24a555b2f3da7ec8da60ff6ea9938327d8a6ed73f92e01909e47e394f6b52",
+    "examples/workloads/modular_quote.rb": "dc912fab9aa738a25a2035f2773b92e6c76275f70c415ff3043d75fa42a8427d",
+    "examples/workloads/multi_file_quote.rb": "c30d05d29917542d782b36fde21726f4bbe0c3c86b6e63f55021f81bfbeff1cb",
+    "examples/workloads/notification.rb": "fcaa35dc3a7b4dd2d2ca837a0f108ad63391adc69e75834f3745ce279c0de403",
+    "examples/workloads/quote_app/preferred_quote.rb": "8495dec29fa4a22bc1f30af9cd05a4ae6922357ddc31c7581dc6575faffda6e8",
+    "examples/workloads/quote_app/quote.rb": "78eea4d6926158a042aa0ca24bc94946b341d076b9da4f64fd2c6aa8fb08eae3",
+    "examples/workloads/quote_app/shop.rb": "9842a17d8752819d6619f96150ac31c2a1ae6fe1d260be6ad242022b7df8c16b",
+    "examples/workloads/shipping.rb": "a2cb8e1efe0dc38b29f4e41ee4341ac11fda2d372aa807aaf851b380f465e057",
+    "examples/workloads/shopping_cart.rb": "f6cfd9c6ad27dbea10af85c056fd167071b5d6e0be6e971437ee293021161684",
+    "examples/workloads/text_report.rb": "b9bd19de52cceea2b4939c01d82769f9afedde76e3e9a1dec1574d296956c302",
+    "examples/workloads/unit_pricing.rb": "81ee1a305233cd9d19a705c88a83fb5d673b1707397118b5edf02e98535ec9da",
+    "lib/rubast/compilation_error.rb": "6e22ed45341ddc90af0e54b14610857eec4bb587d17661e87629684461050bfd",
+    "lib/rubast/generated_project.rb": "f54fe069c50a8f6e32a6282fb5b510bc9a811fdbc4bf2222a5b3cfc339acca48",
+    "lib/rubast/ir.rb": "ab0edf6fec8a388b57bf520d96c5338051eb59153bb8a9431d123259324c97d0",
+    "lib/rubast/source_file.rb": "525a1c320b30a9133622a2e6f2d9382fd105bb8dc0541ea83cac3b85bb98dec3",
+    "lib/rubast/span.rb": "d881d161d1eb351ac1463c23e079c07f30a0b039be2df633993939776b5d7837",
+    "lib/rubast.rb": "dcc9dc6a7db1d38204825f8e498343c3df5a463192f18f8fafb6da527ea938f5",
+    "runtime/rubast_runtime/src/exceptions.rs": "f197129295498e05ded8df89a4dbfbec0a2b16cfb29dc37d2da866f73a77a91e",
+    "runtime/rubast_runtime/src/lib.rs": "b25536239affdc2bd2e62fc356ae9f50e9a8c74fe44117ccf99321a9fb499b13",
+    "runtime/rubast_runtime/src/text_io/inspection/nonprintable.rs": "0a15543e1c395ec44b25c376ac3387e8c7153e2ddbe1f241b71f4f1170c35cee",
+    "runtime/rubast_runtime/src/text_io/inspection.rs": "d6fcd47566cd6fbdb5c50e6cb528f0e5eb983140ded778bc91b953f9ee3be06c",
+    "runtime/rubast_runtime/src/text_io.rs": "36262e7d8b82a7586c4b9e8535cb95826d54f90a904e6c77fd72b8f22e9c369c"
+  },
+  "ruby": "ruby 3.4.5 (2025-07-16 revision 20cda200d3) +PRISM [x86_64-linux]",
+  "rustc": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "python": "3.14.7",
+  "platform": "Linux-7.1.8-200.fc44.x86_64-x86_64-with-glibc2.43",
+  "cpu": "AMD Ryzen 9 7900 12-Core Processor",
+  "original_affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "affinity": [
+    0
+  ],
+  "rubyopt": "",
+  "rustflags": "",
+  "cargo_target_dir": "",
+  "samples": 21,
+  "build_samples": 3,
+  "rss_samples": 7,
+  "warmups": 3,
+  "measured_stdin_bytes": 897,
+  "measured_stdin_sha256": "c60eefbca3a78b8d86c832ff8d81d3873d0eb0387bba9330526b173424ed6a1c",
+  "baseline_report": null,
+  "results": [
+    {
+      "case": "startup",
+      "iterations": 0,
+      "builds": [
+        {
+          "emit_s": 0.250047967012506,
+          "cargo_s": 0.701669645961374,
+          "total_s": 0.95171761297388
+        },
+        {
+          "emit_s": 0.24677015602355823,
+          "cargo_s": 0.699505403987132,
+          "total_s": 0.9462755600106902
+        },
+        {
+          "emit_s": 0.2464509590063244,
+          "cargo_s": 0.7021237809676677,
+          "total_s": 0.9485747399739921
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage18-million-before/startup-0/target/release/rubast_program",
+      "binary_sha256": "8a29b9f2bcaee2d307aa6d7c3061fc9e3b166c0208452dde3cff25fcefffddcf",
+      "binary_bytes": 524000,
+      "wall_ms": {
+        "ruby": [
+          27.37942,
+          27.179602,
+          27.727626,
+          28.188953,
+          27.917165,
+          39.095687,
+          29.694659,
+          27.782456,
+          27.558478,
+          28.374911,
+          28.738388,
+          28.043854,
+          27.672878,
+          27.36693,
+          27.045993,
+          27.431969,
+          27.34986,
+          26.968703,
+          26.781235,
+          27.063113,
+          27.156972
+        ],
+        "rust": [
+          0.497665,
+          0.576665,
+          0.632875,
+          0.517935,
+          0.601675,
+          0.510326,
+          0.722844,
+          0.557885,
+          0.594715,
+          0.715414,
+          0.544355,
+          0.649394,
+          0.527365,
+          0.531996,
+          0.502775,
+          0.528756,
+          0.543315,
+          0.493836,
+          0.503136,
+          0.503015,
+          0.527786
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          14024,
+          13916,
+          14020,
+          13916,
+          13852,
+          14096,
+          14100
+        ],
+        "rust": [
+          2036,
+          2144,
+          2124,
+          2048,
+          1948,
+          2144,
+          2116
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "quote_requests",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.26810988900251687,
+          "cargo_s": 1.0631592950085178,
+          "total_s": 1.3312691840110347
+        },
+        {
+          "emit_s": 0.2707455449854024,
+          "cargo_s": 1.0687532860320061,
+          "total_s": 1.3394988310174085
+        },
+        {
+          "emit_s": 0.2695575659745373,
+          "cargo_s": 1.0695125689962879,
+          "total_s": 1.3390701349708252
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage18-million-before/quote_requests-0/target/release/rubast_program",
+      "binary_sha256": "1d956f1c35ae5ffea88b3ea9cb6e7f528100979f0c1f15c75d4defdced4b51a6",
+      "binary_bytes": 613312,
+      "wall_ms": {
+        "ruby": [
+          136.443393,
+          130.966771,
+          134.699869,
+          130.662424,
+          130.274427,
+          130.748164,
+          131.476817,
+          130.483245,
+          132.812765,
+          133.284801,
+          131.724674,
+          130.996411,
+          131.032771,
+          131.264769,
+          132.697136,
+          133.849946,
+          132.23731,
+          133.940216,
+          132.158191,
+          131.474816,
+          135.971648
+        ],
+        "rust": [
+          418.889616,
+          420.919748,
+          427.957717,
+          418.188832,
+          420.6498,
+          415.115219,
+          415.417437,
+          418.45533,
+          419.949777,
+          423.076369,
+          422.509804,
+          417.802706,
+          408.883183,
+          420.027696,
+          424.210049,
+          488.03361,
+          423.314677,
+          428.449751,
+          423.723753,
+          473.012541,
+          414.032878
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          13660,
+          13660,
+          13892,
+          13912,
+          14080,
+          14108,
+          14100
+        ],
+        "rust": [
+          2388,
+          2148,
+          2164,
+          2156,
+          2148,
+          2160,
+          2100
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "invoice_summaries",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.27915310102980584,
+          "cargo_s": 1.0525631689815782,
+          "total_s": 1.331716270011384
+        },
+        {
+          "emit_s": 0.2917068020324223,
+          "cargo_s": 1.051694524998311,
+          "total_s": 1.3434013270307332
+        },
+        {
+          "emit_s": 0.27151797799160704,
+          "cargo_s": 1.0183028289466165,
+          "total_s": 1.2898208069382235
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage18-million-before/invoice_summaries-0/target/release/rubast_program",
+      "binary_sha256": "d9fb7dc069c4c5f001d28ad2efd21dd804518875b5e14847b9fb1a6efb8acf1c",
+      "binary_bytes": 622680,
+      "wall_ms": {
+        "ruby": [
+          526.561121,
+          550.524071,
+          524.988836,
+          520.016639,
+          537.506386,
+          564.710667,
+          575.326354,
+          525.789638,
+          549.681439,
+          526.991648,
+          544.004499,
+          543.043077,
+          534.284334,
+          525.820928,
+          553.650284,
+          519.042638,
+          533.5052,
+          558.913078,
+          523.730186,
+          523.428879,
+          566.63994
+        ],
+        "rust": [
+          797.200598,
+          807.724586,
+          806.792263,
+          798.489267,
+          800.35558,
+          799.216051,
+          795.241605,
+          816.365189,
+          798.654605,
+          818.818668,
+          793.51015,
+          788.677932,
+          794.305433,
+          798.836503,
+          803.80711,
+          878.443535,
+          827.135836,
+          826.558441,
+          817.361611,
+          815.408838,
+          790.400407
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          14684,
+          14672,
+          14684,
+          14676,
+          14628,
+          14684,
+          14620
+        ],
+        "rust": [
+          2356,
+          2304,
+          2324,
+          2156,
+          2132,
+          2116,
+          2156
+        ]
+      },
+      "matched_inputs": 3
+    },
+    {
+      "case": "receipt_labels",
+      "iterations": 1000000,
+      "builds": [
+        {
+          "emit_s": 0.2554402999812737,
+          "cargo_s": 0.8040428470121697,
+          "total_s": 1.0594831469934434
+        },
+        {
+          "emit_s": 0.2577362989541143,
+          "cargo_s": 0.7885919540422037,
+          "total_s": 1.046328252996318
+        },
+        {
+          "emit_s": 0.2521635979646817,
+          "cargo_s": 0.7982427889946848,
+          "total_s": 1.0504063869593665
+        }
+      ],
+      "binary": "/home/roger/dev/rubast/target/practical-stage18-million-before/receipt_labels-0/target/release/rubast_program",
+      "binary_sha256": "08a5a22c8fb7ba0df68dd2fc0e134e1a18f2f17a82ea7f432391d1cea97e8674",
+      "binary_bytes": 554264,
+      "wall_ms": {
+        "ruby": [
+          253.279709,
+          241.146875,
+          246.519337,
+          256.022734,
+          257.976128,
+          247.269601,
+          247.39466,
+          239.108532,
+          247.244602,
+          254.799854,
+          244.330437,
+          284.459505,
+          261.693914,
+          246.894075,
+          253.743054,
+          242.236395,
+          242.685862,
+          254.555297,
+          239.639698,
+          242.651492,
+          243.96254
+        ],
+        "rust": [
+          338.827058,
+          324.560453,
+          330.938648,
+          325.757623,
+          335.590296,
+          338.016735,
+          340.363675,
+          335.875754,
+          335.298569,
+          332.776852,
+          330.151254,
+          325.559285,
+          329.49381,
+          326.04471,
+          324.824651,
+          328.557758,
+          327.272739,
+          329.274552,
+          335.981613,
+          333.095858,
+          327.644486
+        ]
+      },
+      "peak_rss_kib": {
+        "ruby": [
+          15384,
+          15644,
+          15644,
+          15620,
+          15580,
+          15196,
+          15388
+        ],
+        "rust": [
+          2124,
+          2068,
+          2240,
+          2080,
+          2060,
+          2320,
+          2084
+        ]
+      },
+      "matched_inputs": 3
+    }
+  ]
+}

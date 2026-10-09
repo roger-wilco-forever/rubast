@@ -214,13 +214,17 @@ Scalar print/warn and zero/multi-argument puts preserve argument evaluation, ali
 
 **Verification:** bin/verify passed: RuboCop (83 files), 6 RSpec examples, 897 Cucumber scenarios (3,142 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Focused artifact/emission features passed: 39 scenarios, 169 steps. The real compiler-error reproduction and retained release quote application also passed.
 
-### 18. Measured optimization — planned
+### 18. Measured optimization — complete
 
-An early [synthetic baseline](benchmarks.md) measures the current stage-5 subset before optimization. It does not complete this milestone or change the implementation order.
+The historical [synthetic baseline](benchmarks.md) remains a stage-5 startup/source-size experiment. The [application-shaped benchmark](practical-benchmarks.md) adds a startup control and one million iterations of multi-file quote calculations, invoice summaries, and receipt labels using stable source size and reused objects. A standard-library [runner](../benchmarks/practical.py) records shuffled wall-time pairs, separate peak RSS, fresh emission/release-build samples, binary sizes, and source/runner/binary/input hashes. Retained unoptimized binaries are re-measured alongside current Rust and pinned CRuby on one CPU; all programs match stdout/stderr/status on three input fixtures.
 
-Choose real benchmark programs and measure compilation time, startup, runtime, memory, and binary size. Add call specialization, reduced cloning, and Cargo build reuse only for observed bottlenecks.
+The targeted runtime change appends borrowed string bytes directly into the fresh interpolation result instead of cloning every string part into an intermediate String. Existing scalar conversions, source aliases, frozen state, and mutable independent results remain unchanged. No new Ruby support, call specialization, build cache, allocation reclamation, or compilation context is introduced.
 
-**Acceptance:** an optimization improves a named benchmark and keeps semantic checks green. Record measurement conditions and before/after results; avoid speculative caches or optimization passes.
+**Acceptance:** in the paired million-iteration comparison, invoice summaries improve from 811.040 to 737.930 ms (9.0%) and receipt labels from 326.272 to 298.746 ms (8.4%). [Execution scenarios](../features/measured_workloads.feature) cover the workloads and frozen/shared interpolation. [Before](../benchmarks/results/2026-10-09-practical-before.json) and [paired after](../benchmarks/results/2026-10-09-practical-after.json) reports preserve all samples. The committed runner and current compiler/workload hashes match the measured artifacts; the baseline runtime hash matches stage 17.
+
+**Boundary:** Linux/native release builds, pinned CRuby, warm OS caches, a shared host pinned to CPU 0, 21 timed samples, 7 separate RSS samples, and 3 fresh builds per workload. The million-iteration programs remain slower than CRuby despite the optimization. Startup is about 52 times faster and process RSS about 6.3–6.7 times lower; these do not establish faster individual operations or object reclamation. Fresh builds take about 1.0–1.3 seconds. Compile peak memory and runtime profiling beyond the targeted inspection were not measured. Further optimization requires its own named evidence.
+
+**Verification:** bin/verify passed: RuboCop (87 files), 6 RSpec examples, 902 Cucumber scenarios (3,160 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Focused scenarios passed before scaling from 100,000 to 1,000,000 iterations; the full gate executed the final workloads. All measured programs matched CRuby on three inputs; raw sample counts and retained/source/runner hashes were independently checked.
 
 ### 19. Selected dynamic behavior — future evaluation
 
@@ -230,4 +234,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Stage 17 is complete and verified locally. Commit and push its implementation, acceptance checks, and documentation before starting stage 18. Next, choose realistic programs and record Ruby/Rust compilation time, startup, execution time, peak memory, and binary size; optimize only measured bottlenecks.
+Stage 18 is complete and verified locally. Commit and push the measured change, workload checks, raw results, and documentation before starting stage 19. Next, define one selected dynamic-behavior contract and its interactions with existing static lookup/specialization before implementation; arbitrary eval and dynamic loading remain separate directions without a support commitment.

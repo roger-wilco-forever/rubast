@@ -4,3 +4,4 @@
 /reports/
 .DS_Store
 /.codegraph/
+/benchmarks/__pycache__/

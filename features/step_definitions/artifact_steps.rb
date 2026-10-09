@@ -147,3 +147,7 @@ module ArtifactExecution
 end
 
 World(ArtifactExecution)
+
+Given("I use the benchmark {string}") do |name|
+  @source_path = File.expand_path("../../benchmarks/workloads/#{name}.rb", __dir__)
+end
