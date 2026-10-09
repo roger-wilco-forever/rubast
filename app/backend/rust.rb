@@ -18,7 +18,8 @@ module Rubast
         main = Emitter.new(functions).call(program)
         source = ["use rubast_runtime::{Runtime, Value, Flow, Outcome, Location};", "", *functions.values.map(&:last),
                   main].join("\n")
-        GeneratedProject.new(files: { "Cargo.toml" => MANIFEST, "src/main.rs" => source }.freeze)
+        GeneratedProject.new(files: { "Cargo.toml" => MANIFEST, "src/main.rs" => source,
+                                      "source-map.json" => SourceMap.call(source) }.freeze)
       end
 
       def self.function(node, functions)
@@ -311,6 +312,7 @@ module Rubast
         include Exceptions
         include Objects
         include Namespaces
+        include SourceMap::Emission
 
         def initialize(functions)
           @functions = functions
@@ -338,18 +340,14 @@ module Rubast
           @frame_name = method_label(node)
           @targets["return"] = [0, :return]
           signature = ["runtime: &mut Runtime", "receiver: Value", *parameters.values.map { |arg| "#{arg}: Value" }]
-          lines = ["fn #{name}(#{signature.join(', ')}) -> Outcome {"]
+          lines = [SourceMap.marker(node.body.span), "fn #{name}(#{signature.join(', ')}) -> Outcome {"]
           initialize_locals(node.locals, parameters, lines)
           value = emit_expression(node.body, lines)
           lines << "    Ok(#{value})"
-          lines.push("}", "").join("\n")
+          lines.push("}", "    // rubast:end", "").join("\n")
         end
 
         private
-
-        def emit_statement(node, lines)
-          lines << "    let _ = #{emit_expression(node, lines)};"
-        end
 
         def emit_local_write(node, lines)
           value = emit_expression(node.value, lines)
@@ -357,7 +355,7 @@ module Rubast
           emit_value("#{@locals.fetch(node.name)}.clone()", lines)
         end
 
-        def emit_expression(node, lines)
+        def emit_mapped_expression(node, lines)
           case node
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue,
                IR::IOReference

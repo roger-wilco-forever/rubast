@@ -16,8 +16,8 @@ CLI
   → SourceLoader (SourceReader → PrismParser → Normalizer for each dependency)
   → Validator/Analyzer
   → RustEmitter → GeneratedProject
-  → ProjectWriter (emit-rust directly, or through CargoRunner for run)
-  → CargoRunner (run only)
+  → ProjectWriter (emit-rust directly, or through CargoRunner for run/build)
+  → CargoRunner (build, or build + execution for run)
 ```
 
 Target contract: each `Compiler#call(request)` gets a separate `CompilationContext` containing the source file, options, name tables, diagnostics, and temporary data. The container holds no per-compilation state. Stateless services may be reused. An analyzer with working tables is created for each run or receives those tables through the context. Memoization is a decision for each component.
@@ -37,7 +37,7 @@ Expected user errors become structured diagnostics with codes and Ruby spans. Un
 ## Container rules
 
 - `Rubast::Container < Dry::System::Container` lives in `system/container.rb`. `Rubast::Import = Rubast::Container.injector` lives in `system/import.rb`. The container configures `use :zeitwerk` and component directories.
-- Only services under `app/` are auto-registered. IR nodes, diagnostics, and request values live under `lib/rubast/` outside the container. The `app/` root constant namespace is `Rubast`, while keys follow paths: `source.reader`, `frontend.parser`, `frontend.normalizer`, `frontend.loader`, `analysis.validator`, `backend.rust`, `build.writer`, `build.cargo`, and `compiler`. For example, `app/frontend/parser.rb` defines `Rubast::Frontend::Parser`.
+- Only services under `app/` are auto-registered. IR nodes, diagnostics, and request values live under `lib/rubast/` outside the container. The `app/` root constant namespace is `Rubast`, while keys follow paths: `source.reader`, `frontend.parser`, `frontend.normalizer`, `frontend.loader`, `analysis.validator`, `backend.rust`, `build.writer`, `build.cargo`, `build.diagnostics`, `debug.ir`, and `compiler`. For example, `app/frontend/parser.rb` defines `Rubast::Frontend::Parser`.
 - Services express dependencies through constructors. [Auto-injection](https://hanakai.org/learn/dry/dry-system/v1.2/dependency-auto-injection) is allowed at the orchestration layer; stage algorithms and IR do not know about the container.
 - Introduce [providers](https://hanakai.org/learn/dry/dry-system/v1.2/providers) for resources with a `prepare/start/stop` lifecycle. An ordinary `cargo` invocation is an adapter call, not a long-lived provider.
 - Choose memoization explicitly for each component. Never share mutable per-compilation state between runs.
@@ -53,7 +53,8 @@ app/compiler.rb                # orchestration of one compilation
 app/frontend/                  # Prism adapter and normalization
 app/analysis/                  # subset validation and analysis
 app/backend/                   # Rust and Cargo manifest generation
-app/build/                     # project writing and Cargo execution
+app/build/                     # project/binary writing and Cargo JSON diagnostics
+app/debug/                     # per-dump IR graph serialization
 lib/rubast/                    # IR, spans, and diagnostics outside the container
 runtime/rubast_runtime/        # Rust crate linked into output programs
 features/                      # Cucumber acceptance behavior
@@ -84,4 +85,4 @@ Start with a Cucumber scenario under `features/`: Ruby source, a Rubast command,
 
 For a supported program, Cucumber runs the same file under pinned CRuby and Rubast in isolated temporary directories and compares stdout, stderr, and exit status. For an unsupported program, check the diagnostic code and Ruby location without invoking Cargo. RSpec checks normalization, analysis, and generation on small inputs; a wiring spec checks container keys and can substitute the Cargo runner. Run the Rust runtime checks with `cargo test`. Local commands are `bundle exec rubocop`, `bundle exec cucumber --publish-quiet`, `bundle exec rspec`, `cargo fmt --manifest-path runtime/rubast_runtime/Cargo.toml --check`, and `cargo test --manifest-path runtime/rubast_runtime/Cargo.toml`. GitHub Actions runs them on every push and pull request.
 
-The first scenarios cover `puts 42`, signed 64-bit integer boundaries, unsupported constructs and blocks, and a parse error. The [interactive greeting example](../examples/hello_user.rb) adds local variables, UTF-8 strings, `gets&.chomp`, interpolation, Unicode input, EOF, and a prompt observed before input is sent. These scenarios exercise CLI → Prism → IR → Rust → Cargo and stop compilation on diagnostics. The current `SourceFile` contains bytes and a path. `emit-rust FILE -o DIR` now retains the generated Cargo project, including runtime source and excluding build caches. The shared `build.writer` service writes both emitted and temporary projects; nonempty destinations and filesystem errors produce `E_OUTPUT`. `CompilationContext`, full `SourceSpan` values, a source map, and a separate `build` command remain future work.
+The first scenarios cover `puts 42`, signed 64-bit integer boundaries, unsupported constructs and blocks, and a parse error. The [interactive greeting example](../examples/hello_user.rb) adds local variables, UTF-8 strings, `gets&.chomp`, interpolation, Unicode input, EOF, and a prompt observed before input is sent. These scenarios exercise CLI → Prism → IR → Rust → Cargo and stop compilation on diagnostics. The current `SourceFile` contains bytes and a path. `emit-rust FILE -o DIR` now retains the generated Cargo project, including runtime source and excluding build caches. The shared `build.writer` service writes both emitted and temporary projects; nonempty destinations and filesystem errors produce `E_OUTPUT`. `build FILE -o BIN` adds persistent executables and shares debug/release profile selection and optional project retention with `run`. `dump-ir` exposes normalized/semantic IR as per-dump JSON node graphs. Backend source markers generate source-map.json for mapped Cargo error locations; runtime backtraces already carry Ruby positions. `CompilationContext`, full range-based `SourceSpan` values, and incremental build reuse remain future work. See [compiler artifacts](compiler-artifacts.md).

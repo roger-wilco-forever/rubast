@@ -5,10 +5,19 @@ require "optparse"
 require_relative "../lib/rubast"
 require_relative "../system/container"
 
-output_directory = nil
+output = nil
+release = false
+project = nil
+stage = nil
 options = OptionParser.new do |parser|
-  parser.banner = "Usage: rubast run FILE.rb\n       rubast emit-rust FILE.rb -o DIR"
-  parser.on("-o", "--output DIR", "Save the generated project (emit-rust only)") { |dir| output_directory = dir }
+  parser.banner = "Usage: rubast run FILE.rb [--release] [--keep-project DIR]\n       " \
+                  "rubast build FILE.rb -o BIN [--release] [--keep-project DIR]\n       " \
+                  "rubast emit-rust FILE.rb -o DIR\n       " \
+                  "rubast dump-ir FILE.rb [--stage normalized|semantic]"
+  parser.on("-o", "--output PATH", "Binary (build) or Cargo project (emit-rust) destination") { |path| output = path }
+  parser.on("--release", "Build optimized Rust (run/build)") { release = true }
+  parser.on("--keep-project DIR", "Retain generated project and build artifacts (run/build)") { |dir| project = dir }
+  parser.on("--stage STAGE", "IR stage: normalized or semantic (dump-ir; default semantic)") { |value| stage = value }
   parser.on("-h", "--help", "Show help") do
     puts parser
     exit 0
@@ -18,19 +27,25 @@ end
 begin
   options.parse!
   command, path = ARGV
-  valid_command = (command == "run" && output_directory.nil?) ||
-                  (command == "emit-rust" && output_directory && !output_directory.empty?)
-  unless valid_command && path && ARGV.length == 2
+  valid_options = case command
+                  when "run" then output.nil? && stage.nil?
+                  when "build" then output && stage.nil?
+                  when "emit-rust" then output && !release && project.nil? && stage.nil?
+                  when "dump-ir" then output.nil? && !release && project.nil? && [nil, "normalized",
+                                                                                  "semantic"].include?(stage)
+                  end
+  unless valid_options && path && ARGV.length == 2 && output != "" && project != ""
     warn options
     exit 64
   end
 
   compiler = Rubast::Container["compiler"]
-  if command == "emit-rust"
-    compiler.emit(path, output_directory)
-    exit 0
+  case command
+  when "emit-rust" then compiler.emit(path, output)
+  when "build" then compiler.build(path, output, release: release, directory: project)
+  when "dump-ir" then puts compiler.dump(path, stage: stage || "semantic")
+  when "run" then exit compiler.call(path, release: release, directory: project).exitstatus
   end
-  exit compiler.call(path).exitstatus
 rescue OptionParser::ParseError => error
   warn error
   warn options

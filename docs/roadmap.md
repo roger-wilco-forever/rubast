@@ -202,11 +202,17 @@ Scalar print/warn and zero/multi-argument puts preserve argument evaluation, ali
 
 ## Compiler maturity
 
-### 17. Persistent binaries and diagnostics — planned
+### 17. Persistent binaries and diagnostics — complete
 
-Add `build`, a persistent binary destination, and a release mode. Extend Ruby-to-Rust source mapping and expose normalized and semantic IR for debugging.
+`build FILE -o BIN` saves a standalone executable without running it. Build/run share debug/release profiles and optional `--keep-project DIR` retention through the existing writer and Cargo runner. Existing binary destinations and nonempty project directories are rejected; binary/project overlap includes directory aliases. Exclusive binary creation preserves a destination created after preflight. No compilation context or build cache is introduced.
 
-**Acceptance:** the binary runs without Ruby; the saved project builds independently; diagnostics identify Ruby source; retained artifacts reproduce failures. Avoid adding a compilation context until shared per-run data requires it.
+`dump-ir FILE --stage normalized|semantic` prints versioned JSON node graphs with identity-preserving references for shared/cyclic types. Normalized dumps precede semantic validation. Source markers produce source-map.json for exact emitted Rust lines; Cargo JSON primary spans map to Ruby path/line/column while retaining rendered Rust errors. Unmapped infrastructure/runtime failures keep their own locations.
+
+**Acceptance:** [artifact scenarios](../features/compiler_artifacts.feature) execute debug/release binaries after deleting Ruby source dependencies, independently build retained projects, compare stdout/stderr/status with CRuby, preserve program failures, reject occupied/aliased destinations, and inspect normalized/semantic cyclic IR without Cargo or execution. A [real Cargo failure check](../spec/build/cargo_spec.rb) maps a loaded dependency's source position and rebuilds the retained failing project. The retained target/quote-stage17-project builds offline in release mode; its binary and target/quote-stage17 match CRuby for the multi-file quote application. All nine retained source/map/runtime files match current emission byte-for-byte. Separate normalized and semantic dumps contain 323 and 618 nodes respectively.
+
+**Boundary:** Linux/native builds with the available Rust toolchain, no overwrite option, new/empty retained destinations, and source maps for unmodified emitted source. Manual edits/formatting invalidate line maps; synthetic scaffolding can use enclosing Ruby spans or retain Rust locations. No DWARF Ruby debugging, cross-compilation, build cache, automatic edited-project map updates, or stable semantic IR API. See [artifact formats and reproduction](compiler-artifacts.md).
+
+**Verification:** bin/verify passed: RuboCop (83 files), 6 RSpec examples, 897 Cucumber scenarios (3,142 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Focused artifact/emission features passed: 39 scenarios, 169 steps. The real compiler-error reproduction and retained release quote application also passed.
 
 ### 18. Measured optimization — planned
 
@@ -224,4 +230,4 @@ Evaluate class reopening, method redefinition, `send`, `respond_to?`, `method_mi
 
 ## Next action
 
-Stage 16 is complete and verified locally. Commit and push it before implementing stage 17: a build command, persistent binaries, release mode, inspectable IR, and Ruby source diagnostics. Define CLI destination and overwrite behavior first; reuse the existing writer and Cargo runner without adding speculative compilation state.
+Stage 17 is complete and verified locally. Commit and push its implementation, acceptance checks, and documentation before starting stage 18. Next, choose realistic programs and record Ruby/Rust compilation time, startup, execution time, peak memory, and binary size; optimize only measured bottlenecks.

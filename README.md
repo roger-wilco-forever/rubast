@@ -7,12 +7,12 @@ Rubast is an experimental ahead-of-time compiler from Ruby to Rust. The compiler
 The pipeline is:
 
 ```text
-Ruby source files → Prism (Ruby API) → semantic IR (Ruby) → generated Rust + Rust runtime → Cargo binary
+Ruby source files → Prism (Ruby API) → normalized IR → semantic IR → generated Rust + Rust runtime → Cargo binary
 ```
 
 Ruby and Prism are needed to run the compiler. Its Ruby services are assembled with `dry-system` and loaded with Zeitwerk. Acceptance behavior is specified with Cucumber; compiler components are checked with RSpec. The compiled program uses the Rust runtime linked into its binary.
 
-The compiler requires CRuby 3.4.5 and Bundler. Building or running a generated program also requires Rust and Cargo. Dependencies are locked in `Gemfile.lock`.
+The compiler requires CRuby 3.4.5 and Bundler. Compiling a program also requires Rust and Cargo; the finished binary runs without Ruby, Rust, Cargo, or the original Ruby source files. Dependencies are locked in `Gemfile.lock`.
 
 ```sh
 bundle install
@@ -41,7 +41,26 @@ cargo build --manifest-path target/greeter/Cargo.toml
 target/greeter/target/debug/rubast_program
 ```
 
-`emit-rust` does not invoke Cargo or execute the Ruby program. The output includes `Cargo.toml`, `src/main.rs`, and the runtime source; runtime build caches are excluded. Existing nonempty destinations are rejected with `E_OUTPUT`. Compiler and output errors exit with status 2; invalid command usage exits with status 64. `run` continues to build and execute in a temporary directory that is removed afterward.
+`emit-rust` does not invoke Cargo or execute the Ruby program. The output includes `Cargo.toml`, `src/main.rs`, and the runtime source; runtime build caches are excluded. Existing nonempty destinations are rejected with `E_OUTPUT`. Compiler and output errors exit with status 2; invalid command usage exits with status 64. `run` builds and executes in a temporary directory that is removed afterward unless `--keep-project DIR` is supplied.
+
+To build a persistent binary without executing it:
+
+```sh
+bundle exec ruby bin/rubast build examples/workloads/multi_file_quote.rb \
+  -o target/quote --release --keep-project target/quote-build
+target/quote
+```
+
+`build` requires `-o BIN`; its destination must not exist, including dangling symlinks. Parent directories are created as needed. `--release` selects Cargo's optimized release profile for `build` or `run`; debug is the default. `--keep-project DIR` retains a standalone Cargo project, its source map, and Cargo artifacts on success or build failure. The project directory must be new or empty, and it must be separate from the binary destination, including through directory symlinks. Existing files are never deliberately overwritten. Unsupported Ruby fails before writing artifacts. Without retention, intermediate projects are temporary.
+
+Inspect either compiler IR stage without Cargo or program execution:
+
+```sh
+bundle exec ruby bin/rubast dump-ir examples/workloads/multi_file_quote.rb --stage normalized
+bundle exec ruby bin/rubast dump-ir examples/workloads/multi_file_quote.rb --stage semantic
+```
+
+`dump-ir` defaults to semantic IR. Normalized IR includes expanded static source dependencies before semantic validation, so it remains available for syntax that normalizes but is semantically unsupported. Dumps are versioned JSON node graphs with `$ref` references preserving shared and cyclic types. Every emitted project also includes `source-map.json`; Cargo errors on mapped generated lines report the Ruby path, line, and column while retaining Rust's original error text. Runtime/compiler infrastructure errors retain their own locations. The map describes the exact emitted source and must be regenerated after edits or formatting. See [compiler artifacts](docs/compiler-artifacts.md) for the formats and reproduction commands.
 
 Multiple Ruby files support `require_relative "path"` and restricted `require "./path"`, `require "../path"`, or an absolute literal path. Loading is restricted to unconditional file-level statements, local assignments, and direct `puts`/`p` arguments. Paths must be literal UTF-8 strings with a `.rb` filename extension or no filename extension (which adds `.rb`). Dependencies load in source order with independent file-local scopes, shared constants/object state, defining lexical namespaces, and their own frozen-string pragmas and warnings. Repeated and circular requires return `false`; a completed first load returns `true`. Symlink aliases share one loaded-file identity, and `require_relative` resolves from the requiring file's real directory. The command-line entry is not initially a loaded feature, matching CRuby.
 
@@ -154,7 +173,7 @@ target/linked-names/target/release/rubast_program
 # true
 ```
 
-Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run` and `emit-rust`; a separate `build` command and the broader language subset remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
+Run the complete local checks with `bin/verify` (RuboCop, RSpec, Cucumber, Rust formatting, and Cargo tests). GitHub Actions runs the same checks on pushes and pull requests. Cucumber compares supported programs with CRuby and checks diagnostics for unsupported programs. The CLI exposes `run`, `build`, `emit-rust`, and `dump-ir`; measured optimization and selected dynamic language behavior remain planned. See [the implementation roadmap](docs/roadmap.md) for the agreed sequence and acceptance criteria.
 
 For application-shaped examples, see the [workload corpus and blocker table](examples/README.md): invoice payments, shipping policies, guarded unit pricing, the unchanged class-owned registry, modular quotes, and UTF-8 receipt export currently compile; streaming logs, shopping-cart aggregation, and notification configuration still expose analysis limits and planned features. Every example has an executable CRuby reference; unsupported examples intentionally remain rejected by Rubast.
 
