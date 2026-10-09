@@ -84,12 +84,18 @@ module Rubast
 
       private
 
+      def inspectable_type?(type)
+        type.is_a?(IR::IntegerType) || type.is_a?(IR::SymbolType) ||
+          %i[nil boolean string frozen_string unknown never].include?(type)
+      end
+
       def validate_p(node, locals)
         unsupported(node) unless node.arguments.one? && node.receiver.nil? && !node.safe_navigation
         value = validate_expression(node.arguments.first, locals)
         type = type_of(value, locals)
-        supported = members(type).all? { |member| member.is_a?(IR::IntegerType) || %i[nil boolean unknown never].include?(member) }
+        supported = members(type).all? { |member| inspectable_type?(member) }
         unsupported(node) unless supported
+        record_io_errors(node, :stdout, locals) unless type == :never
         IR::Print.new(value: value, result_type: type, span: node.span)
       end
     end

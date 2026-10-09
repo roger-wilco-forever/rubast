@@ -57,9 +57,7 @@ module Rubast
         def effect_type(node, locals)
           case node
           when IR::Return then :never
-          when IR::GetLine then :string_or_nil
           when IR::SafeChomp then safe_chomp_type(node, locals)
-          when IR::Puts then continuing_type(node.value, locals, :nil)
           when IR::InterpolatedString then continuing_type(node.parts, locals, :string)
           end
         end
@@ -86,14 +84,6 @@ module Rubast
         COMPARISONS = %i[< <= > >=].freeze
 
         private
-
-        def validate_puts(node, locals)
-          unless node.receiver.nil? && !node.safe_navigation && node.name == :puts && node.arguments.one?
-            unsupported(node)
-          end
-
-          IR::Puts.new(value: validate_output(node.arguments.first, locals), span: node.span)
-        end
 
         def validate_scalar(node, locals)
           value = validate_expression(node, locals)
@@ -369,7 +359,7 @@ module Rubast
 
         def validate_variable(node, locals)
           case node
-          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad
+          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad, IR::GlobalRead
             validate_namespace_reference(node, locals)
           when IR::SelfRead
             unsupported(node) unless @receiver_type
@@ -391,7 +381,7 @@ module Rubast
           node.with(value: value)
         end
 
-        def validate_method_body(method, parameters, receiver, origin = method, **context)
+        def checked_method_body(method, parameters, receiver, origin = method, **context)
           owner = context.fetch(:owner, receiver.class_name)
           saved_context = method_environment
           key = [receiver.class_name, owner, method.name]
@@ -439,6 +429,12 @@ module Rubast
 
         def validate_special_receiver(node, receiver, type, locals)
           return validate_nil_predicate(node, receiver, type) if node.name == :nil?
+
+          if io_type?(type)
+            return validate_operation(node, receiver, type, locals) if %i[== != !].include?(node.name)
+
+            return validate_io_call(node, receiver, type, locals)
+          end
           return validate_block_receiver(node, receiver, type, locals) if block_receiver_call?(node, type)
           return validate_exception_call(node, receiver, type, locals) if type.is_a?(IR::ExceptionType)
           return validate_collection_call(node, receiver, type, locals) if collection_call?(node, type)
@@ -498,6 +494,7 @@ module Rubast
         include CallArguments
         include Arguments
         include Exceptions
+        include TextIo
 
         def call(program)
           initialize_namespaces
@@ -527,9 +524,10 @@ module Rubast
 
         def validate_expression(node, locals)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue,
+               IR::IOReference
             validate_literal(node)
-          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad, IR::LocalRead, IR::LocalWrite,
+          when IR::Setter, IR::ConstantRead, IR::ConstantPath, IR::SourceLoad, IR::GlobalRead, IR::LocalRead, IR::LocalWrite,
                IR::InstanceRead, IR::InstanceWrite, IR::SelfRead
             validate_variable(node, locals)
           when IR::Sequence, IR::Conditional, IR::Return, IR::Loop, IR::LoopExit, IR::Protected, IR::Retry, IR::CallError
@@ -559,7 +557,9 @@ module Rubast
         def validate_kernel_call(node, locals)
           return validate_p(node, locals) if node.name == :p
 
-          node.name == :puts ? validate_puts(node, locals) : validate_raise(node, locals)
+          return validate_io_kernel(node, locals) if %i[puts print warn gets].include?(node.name)
+
+          validate_raise(node, locals)
         end
 
         def validate_new(node, locals, receiver = nil)
@@ -630,7 +630,7 @@ module Rubast
           literal_type(node)
         when IR::BlockValue then IR::BlockType.new(id: node.id)
         when IR::LoopExit, IR::BlockExit, IR::Retry then :never
-        when IR::Return, IR::GetLine, IR::SafeChomp, IR::Puts, IR::InterpolatedString then effect_type(node, locals)
+        when IR::Return, IR::SafeChomp, IR::InterpolatedString then effect_type(node, locals)
         when IR::Call then continuing_type([node.receiver, *node.arguments], locals, :unknown)
         when IR::LocalRead, IR::LocalWrite, IR::InstanceWrite then local_type(node, locals)
         when IR::NewObject, IR::MethodCall, IR::Sequence, IR::InstanceRead, IR::SelfRead, IR::Operation, IR::Conditional,
@@ -638,17 +638,13 @@ module Rubast
              IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise,
              IR::ExceptionValue, IR::CallError, IR::ArgumentCopy, IR::ParameterArray, IR::ParameterHash,
              IR::ArgumentEvaluation, IR::BlockPass, IR::ConstantGet, IR::ConstantSet, IR::NamespaceBody,
-             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad
+             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad, IR::IOReference
           node.result_type
         end
       end
 
       def local_type(node, locals)
         node.is_a?(IR::LocalRead) ? locals.fetch(node.name) : type_of(node.value, locals)
-      end
-
-      def gets_call?(node)
-        node.receiver.nil? && !node.safe_navigation && node.name == :gets && node.arguments.empty?
       end
 
       def safe_chomp_call?(node)

@@ -7,7 +7,14 @@ module Rubast
                   ArgumentError: :StandardError, TypeError: :StandardError, IndexError: :StandardError,
                   ZeroDivisionError: :StandardError, FrozenError: :RuntimeError, RangeError: :StandardError,
                   IOError: :StandardError, NameError: :StandardError, NoMethodError: :NameError,
-                  LocalJumpError: :StandardError }.freeze
+                  LocalJumpError: :StandardError, EOFError: :IOError, SystemCallError: :StandardError,
+                  EncodingError: :StandardError, "Encoding::InvalidByteSequenceError": :EncodingError,
+                  "Errno::ENOENT": :SystemCallError, "Errno::EACCES": :SystemCallError,
+                  "Errno::EISDIR": :SystemCallError, "Errno::ENOTDIR": :SystemCallError,
+                  "Errno::EEXIST": :SystemCallError, "Errno::ENOSPC": :SystemCallError,
+                  "Errno::EROFS": :SystemCallError, "Errno::ELOOP": :SystemCallError,
+                  "Errno::ENAMETOOLONG": :SystemCallError, "Errno::EIO": :SystemCallError,
+                  "Errno::EBADF": :SystemCallError, "Errno::EPIPE": :SystemCallError }.freeze
 
       module Raising
         private
@@ -78,6 +85,7 @@ module Rubast
         end
 
         def validate_exception_value(name, message, locals, origin)
+          unsupported(origin) if name == :SystemCallError
           value = validate_expression(message, locals)
           type = type_of(value, locals)
           unsupported(origin) unless type == :unknown || type == :never || string_type?(type)
@@ -155,9 +163,18 @@ module Rubast
           return [:StandardError] if handler.classes.empty?
 
           handler.classes.map do |value|
-            unsupported(value) unless value.is_a?(IR::ConstantRead) && exception_class?(value.name)
-            value.name
+            name = rescue_class_name(value)
+            unsupported(value) unless exception_class?(name)
+            name
           end
+        end
+
+        def rescue_class_name(value)
+          unsupported(value) unless value.is_a?(IR::ConstantRead) || value.is_a?(IR::ConstantPath)
+          parts, absolute = constant_parts(value)
+          key = absolute ? @constants[parts.first] : lexical_constant(parts.first)
+          unsupported(value) if key
+          parts.join("::").to_sym
         end
 
         def rescued_type(classes, matching)

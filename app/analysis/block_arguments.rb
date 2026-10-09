@@ -124,7 +124,7 @@ module Rubast
       def validate_passed_block(node, receiver, resolution, locals)
         _, target = resolution
         prepared = prepare_arguments(node.call, target.last, locals, owner: target.first)
-        value = validate_expression(node.value, locals)
+        value = with_dead_call_effects(prepared[1], locals) { validate_expression(node.value, locals) }
         prepared = append_block_argument(prepared, value, locals)
         error = checked_block_conversion(node, receiver, prepared, value, locals)
         return error if error

@@ -94,10 +94,10 @@ module Rubast
     InterpolatedString = Data.define(:parts, :span)
     LocalWrite = Data.define(:name, :value, :span)
     LocalRead = Data.define(:name, :span)
-    GetLine = Data.define(:span)
+    GlobalRead = Data.define(:name, :span)
+    IOReference = Data.define(:result_type, :span)
     SafeChomp = Data.define(:receiver, :span)
     NilCheck = Data.define(:receiver, :known, :result_type, :span)
     Print = Data.define(:value, :result_type, :span)
-    Puts = Data.define(:value, :span)
   end
 end

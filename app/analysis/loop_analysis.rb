@@ -60,11 +60,16 @@ module Rubast
         def loop_truth(node)
           case node
           when IR::BooleanLiteral then node.value
-          when IR::NilLiteral, IR::Puts then false
+          when IR::NilLiteral then false
+          when IR::Builtin then loop_builtin_truth(node)
           when IR::StringLiteral, IR::IntegerLiteral then true
           when IR::LocalWrite, IR::InstanceWrite then loop_truth(node.value)
           when IR::Sequence then node.expressions.empty? ? false : loop_truth(node.expressions.last)
           end
+        end
+
+        def loop_builtin_truth(node)
+          false if node.result_type == :nil
         end
 
         def constrain_loop_guard?(predicate, truth, locals)

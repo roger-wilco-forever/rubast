@@ -129,7 +129,9 @@ module Rubast
 
         def validate_output(node, locals)
           value = validate_scalar(node, locals)
-          unsupported(node) if block_type?(type_of(value, locals))
+          unsupported(node) if block_type?(type_of(value, locals)) || members(type_of(value, locals)).any? do |type|
+            io_type?(type)
+          end
           value
         end
 
@@ -158,6 +160,13 @@ module Rubast
           return bindings.first if bindings.first.is_a?(IR::CallError)
 
           IR::Sequence.new(expressions: [*bindings, method.body].freeze, result_type: nil, span: method.span)
+        end
+
+        def validate_method_body(method, parameters, receiver, origin = method, **context)
+          body = with_dead_call_effects(parameters, {}) do
+            checked_method_body(method, parameters, receiver, origin, **context)
+          end
+          parameters.value?(:never) ? body.with(result_type: :never) : body
         end
 
         def checked_entry_body(method, context, locals)

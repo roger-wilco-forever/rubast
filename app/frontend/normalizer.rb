@@ -81,7 +81,7 @@ module Rubast
 
         def normalize_variable(node, source)
           case node
-          when Prism::SelfNode then IR::SelfRead.new(result_type: nil, span: span(node, source))
+          when Prism::SelfNode, Prism::GlobalVariableReadNode then normalize_special_reference(node, source)
           when Prism::InstanceVariableWriteNode
             IR::InstanceWrite.new(name: node.name, value: normalize(node.value, source), span: span(node, source))
           when Prism::InstanceVariableReadNode
@@ -93,6 +93,12 @@ module Rubast
           when Prism::LocalVariableOperatorWriteNode, Prism::InstanceVariableOperatorWriteNode
             normalize_operator_write(node, source)
           end
+        end
+
+        def normalize_special_reference(node, source)
+          return IR::SelfRead.new(result_type: nil, span: span(node, source)) if node.is_a?(Prism::SelfNode)
+
+          IR::GlobalRead.new(name: node.name, span: span(node, source))
         end
 
         def normalize_operator_write(node, source)
@@ -234,7 +240,7 @@ module Rubast
              Prism::ArrayNode, Prism::HashNode, Prism::SymbolNode
           normalize_literal(node, source)
         when Prism::LocalVariableWriteNode, Prism::LocalVariableReadNode,
-             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode,
+             Prism::InstanceVariableWriteNode, Prism::InstanceVariableReadNode, Prism::SelfNode, Prism::GlobalVariableReadNode,
              Prism::LocalVariableOperatorWriteNode, Prism::InstanceVariableOperatorWriteNode
           normalize_variable(node, source)
         when Prism::InterpolatedStringNode

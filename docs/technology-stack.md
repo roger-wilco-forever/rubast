@@ -72,6 +72,7 @@ Dependencies flow from `compiler → stages → IR`. Adapters perform external o
 | CLI | [OptionParser](https://docs.ruby-lang.org/en/3.4/OptionParser.html) |
 | IR and diagnostics | `Data.define` and project-owned classes; freeze nested collections separately ([Ruby Data](https://docs.ruby-lang.org/en/3.4/Data.html)) |
 | External commands | `Open3` with argument arrays, without shell interpolation ([Ruby Open3](https://docs.ruby-lang.org/en/3.4/Open3.html)) |
+| Text I/O | Rust standard-library files/streams and the existing Outcome/Flow; UTF-8 input and selected Linux faults; scalar inspection classification generated with pinned CRuby |
 | Output | Rust source plus `rubast_runtime`, built with [Cargo](https://doc.rust-lang.org/cargo/) |
 | Checks | RuboCop for Ruby; Cucumber for CLI behavior; RSpec for passes and wiring; `cargo fmt --check` and `cargo test` for the runtime; differential checks against pinned CRuby |
 

@@ -7,10 +7,12 @@ module Rubast
 
       def validate_arguments(nodes, names, locals)
         types = {}
+        dead = nil
         arguments = nodes.zip(names).map do |node, name|
-          value = validate_expression(node, locals)
+          value = block_given? ? yield(node) : validate_expression(node, locals)
           types[name] = type_of(value, locals)
           unsupported(node) if block_type?(types[name])
+          dead = argument_state(types[name], dead, locals)
           value
         end
         [arguments.freeze, types]
@@ -70,7 +72,30 @@ module Rubast
         name = [:argument, pack[:arguments].length, descriptor].freeze
         pack[:arguments] << value
         pack[:types][name] = type_of(value, locals)
+        pack[:dead] = argument_state(pack[:types][name], pack[:dead], locals)
         IR::LocalRead.new(name: name, span: origin.span)
+      end
+
+      def argument_state(type, dead, locals)
+        if dead
+          state, counts = dead
+          restore(state, locals)
+          restore_flow_exits(counts)
+          dead
+        elsif type == :never
+          [snapshot(locals), flow_exit_counts]
+        end
+      end
+
+      def with_dead_call_effects(types, locals)
+        state = snapshot(locals) if types.value?(:never)
+        counts = flow_exit_counts if state
+        yield
+      ensure
+        if state
+          restore(state, locals)
+          restore_flow_exits(counts)
+        end
       end
 
       def argument_index(reference, index, span)

@@ -6,9 +6,9 @@ The small examples at the root demonstrate supported constructs: [interactive in
 
 ## Realistic workload corpus
 
-The entry programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All nine run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The entry programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All ten run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
 
-Observed after completion of stage 15 on 2026-10-09:
+Observed after completion of stage 16 on 2026-10-09:
 
 | Program | Task | Rubast result | First blocker | Additional work needed |
 | --- | --- | --- | --- | --- |
@@ -21,6 +21,7 @@ Observed after completion of stage 15 on 2026-10-09:
 | [class_definitions.rb](workloads/class_definitions.rb) | A class-owned definition registry populated during class evaluation, with subclass fallback | Matches CRuby | None on the unchanged supplied fixture | Additional acceptance cases cover inherited class receivers, fallback, clear/add, and nested collection aliases |
 | [modular_quote.rb](workloads/modular_quote.rb) | Nested shop namespaces, tax helpers, prepended loyalty discount, accessors, inherited class factory, and callback | Matches CRuby | None on the supplied fixture | Static namespace composition only; dynamic modifications remain outside the subset |
 | [multi_file_quote.rb](workloads/multi_file_quote.rb) | The same quote behavior split into namespaced dependency files | Matches CRuby and the single-file fixture | None on the supplied fixture | Static file-level loading; reopening and dynamic loading remain outside the subset |
+| [text_report.rb](workloads/text_report.rb) | Read a customer, export a UTF-8 receipt, report bytes to stderr, and echo the saved file with cleanup | Matches CRuby with a customer or EOF | None on the supplied fixtures | Whole-file text I/O only; broader file handles, modes, and encodings remain unsupported |
 
 The first diagnostic can hide subsequent blockers. For example, accepting array syntax would not make Symbol-to-Proc aggregation work automatically. The notification example exercises object-result joins even though its syntax already normalizes successfully. Keep these programs intact when implementing support; do not remove useful constructs merely to turn a row green.
 
@@ -103,3 +104,14 @@ bundle exec cucumber --publish-quiet features/realistic_examples.feature --tags 
 The suite is expected to pass while three Ruby programs still fail Rubast compilation. When support is implemented, replace that case's diagnostic assertions with emitted execution and stdout/stderr/exit-status comparison, retain its CRuby reference output, remove its unsupported tag, and update this table. A changed first diagnostic should prompt investigation of the next blocker. Before declaring support, run `bin/verify`.
 
 This corpus supplements the agreed roadmap; it does not reorder stages or complete them. Original fixtures remain self-contained and unchanged. The one-class-per-file lint exemption applies only to workload entry files; the multi-file application's qualified class declarations retain their actual lexical nesting through a narrowly scoped lint exemption.
+
+Receipt export writes `receipt.txt` in the running program's working directory. Use a scratch directory to inspect its output without replacing a local file:
+
+```sh
+bundle exec ruby bin/rubast emit-rust examples/workloads/text_report.rb -o target/text-report-stage16
+cargo build --release --manifest-path target/text-report-stage16/Cargo.toml
+mkdir -p target/receipt-demo
+(cd target/receipt-demo && printf 'Zoë\n' | ../text-report-stage16/target/release/rubast_program)
+# stdout: Customer: Receipt for Zoë / Total: 1250 (two lines)
+# stderr: Saved 29 bytes to receipt.txt
+```

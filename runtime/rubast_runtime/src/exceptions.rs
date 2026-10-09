@@ -159,6 +159,9 @@ impl Runtime {
                 "StandardError" => Some("Exception"),
                 "FrozenError" => Some("RuntimeError"),
                 "NoMethodError" => Some("NameError"),
+                "EOFError" => Some("IOError"),
+                "Encoding::InvalidByteSequenceError" => Some("EncodingError"),
+                name if name.starts_with("Errno::") => Some("SystemCallError"),
                 _ => Some("StandardError"),
             };
         }

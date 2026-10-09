@@ -1,10 +1,10 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{self, Write};
 use std::ops::Deref;
 use std::rc::Rc;
 
 mod exceptions;
+mod text_io;
 use exceptions::ErrorRef;
 pub use exceptions::{Flow, Location, Outcome};
 
@@ -31,11 +31,12 @@ pub enum Value {
     Nil,
     Bool(bool),
     Integer(i64),
-    Symbol(&'static str),
+    Symbol(&'static str, &'static str),
     String(Rc<RubyString>),
     Exception(ErrorRef),
     Object(usize),
     Block(usize),
+    Stream(&'static str),
 }
 
 impl Value {
@@ -58,10 +59,10 @@ impl Value {
             Self::Nil => String::new(),
             Self::Bool(value) => value.to_string(),
             Self::Integer(number) => number.to_string(),
-            Self::Symbol(name) => name.to_owned(),
+            Self::Symbol(name, _) => name.to_owned(),
             Self::String(text) => text.borrow().clone(),
             Self::Exception(error) => error.borrow().message.clone().into_ruby_string(),
-            Self::Object(_) | Self::Block(_) => {
+            Self::Object(_) | Self::Block(_) | Self::Stream(_) => {
                 unreachable!("object string conversion is unsupported")
             }
         }
@@ -441,19 +442,6 @@ impl Runtime {
         value
     }
 
-    pub fn gets(&mut self) -> Value {
-        let mut line = String::new();
-        let bytes_read = io::stdin()
-            .read_line(&mut line)
-            .expect("failed to read standard input");
-
-        if bytes_read == 0 {
-            Value::Nil
-        } else {
-            Value::from(line)
-        }
-    }
-
     pub fn safe_chomp(value: Value) -> Value {
         match value {
             Value::Nil => Value::Nil,
@@ -464,10 +452,11 @@ impl Runtime {
             }
             Value::Bool(_)
             | Value::Integer(_)
-            | Value::Symbol(_)
+            | Value::Symbol(_, _)
             | Value::Object(_)
             | Value::Block(_)
-            | Value::Exception(_) => {
+            | Value::Exception(_)
+            | Value::Stream(_) => {
                 unreachable!("safe_chomp requires a string or nil")
             }
         }
@@ -546,27 +535,5 @@ impl Runtime {
             }
             _ => unreachable!("unknown string operation"),
         }
-    }
-
-    pub fn print_scalar(&mut self, value: Value) {
-        if matches!(value, Value::Nil) {
-            self.puts(Value::from("nil".to_owned()));
-        } else {
-            self.puts(value);
-        }
-    }
-
-    pub fn puts(&mut self, value: Value) {
-        let text = value.into_ruby_string();
-        let mut stdout = io::stdout().lock();
-        stdout
-            .write_all(text.as_bytes())
-            .expect("failed to write standard output");
-        if !text.ends_with('\n') {
-            stdout
-                .write_all(b"\n")
-                .expect("failed to write standard output");
-        }
-        stdout.flush().expect("failed to flush standard output");
     }
 }

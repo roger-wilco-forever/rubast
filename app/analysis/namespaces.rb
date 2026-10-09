@@ -52,6 +52,9 @@ module Rubast
         def validate_constant_read(node)
           key = resolve_constant(node)
           unless key
+            reference = io_reference(node)
+            return reference if reference
+
             unsupported(node) unless @checking_unused
             return IR::ConstantGet.new(name: constant_parts(node).first.join("::"), result_type: :unknown,
                                        span: node.span)
@@ -210,6 +213,7 @@ module Rubast
 
       def validate_namespace_reference(node, locals)
         return validate_source_load(node) if node.is_a?(IR::SourceLoad)
+        return validate_stream_global(node) if node.is_a?(IR::GlobalRead)
 
         node.is_a?(IR::Setter) ? validate_setter(node, locals) : validate_constant_read(node)
       end
@@ -218,8 +222,8 @@ module Rubast
         validate_loading_call(node) if %i[require_relative require load autoload].include?(node.name)
         return validate_declaration(node, locals) if declaration_call?(node)
         return validate_composition(node, locals) if composition_call?(node)
-        return validate_kernel_call(node, locals) if node.receiver.nil? && %i[puts p raise fail].include?(node.name)
-        return IR::GetLine.new(span: node.span) if gets_call?(node)
+        return validate_kernel_call(node, locals) if node.receiver.nil? && %i[puts p print warn gets raise
+                                                                              fail].include?(node.name)
 
         nil
       end

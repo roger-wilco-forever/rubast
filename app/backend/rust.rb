@@ -78,9 +78,15 @@ module Rubast
         when IR::StringLiteral
           text = "#{rust_string(node.value)}.to_owned()"
           node.frozen ? "Value::frozen(#{text}, #{rust_string(node.value.inspect)})" : "Value::from(#{text})"
-        when IR::SymbolLiteral then "Value::Symbol(#{rust_string(node.value)})"
-        when IR::BlockValue then "Value::Block(#{node.id})"
+        when IR::SymbolLiteral, IR::BlockValue, IR::IOReference then named_literal(node)
         end
+      end
+
+      def self.named_literal(node)
+        return "Value::Block(#{node.id})" if node.is_a?(IR::BlockValue)
+        return "Value::Stream(#{rust_string(node.result_type.to_s)})" if node.is_a?(IR::IOReference)
+
+        "Value::Symbol(#{rust_string(node.value)}, #{rust_string(node.value.to_sym.inspect)})"
       end
 
       def self.rust_string(value)
@@ -100,7 +106,7 @@ module Rubast
 
         def emit_flow(node, lines)
           case node
-          when IR::Puts, IR::Print, IR::Sequence then emit_body(node, lines)
+          when IR::Print, IR::Sequence then emit_body(node, lines)
           when IR::Conditional then emit_conditional(node, lines)
           when IR::Loop, IR::LoopExit, IR::BlockExit, IR::BlockBody then emit_loop_flow(node, lines)
           when IR::Return then emit_return(node, lines)
@@ -222,7 +228,7 @@ module Rubast
           inputs = "#{Rust.rust_string(node.name.to_s)}, #{receiver}, vec![#{arguments.join(', ')}]"
           return emit_value("Runtime::exception_message(#{receiver})", lines) if node.family == :exception
 
-          expression = if %i[array string].include?(node.family)
+          expression = if %i[array string io].include?(node.family)
                          "runtime.checked_#{node.family}(#{inputs}, #{location(node.span)})?"
                        else
                          "runtime.#{node.family}_operation(#{inputs})"
@@ -353,18 +359,18 @@ module Rubast
 
         def emit_expression(node, lines)
           case node
-          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue
+          when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue,
+               IR::IOReference
             Rust.literal(node)
           when IR::LocalRead, IR::LocalWrite, IR::InstanceRead, IR::InstanceWrite, IR::SelfRead,
                IR::Setter, IR::ConstantGet, IR::ConstantSet, IR::ClassValue, IR::NamespaceBody, IR::SourceLoad
             emit_variable(node, lines)
-          when IR::GetLine then emit_value("runtime.gets()", lines)
           when IR::SafeChomp then "Runtime::safe_chomp(#{emit_expression(node.receiver, lines)})"
           when IR::InterpolatedString, IR::ArgumentEvaluation then emit_assembled_value(node, lines)
           when IR::NewObject, IR::MethodCall, IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash,
                IR::Builtin, IR::Iterator, IR::BlockInvocation, IR::YieldInvoke, IR::ArgumentCopy
             emit_allocation_or_call(node, lines)
-          when IR::Puts, IR::Print, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::NilCheck,
+          when IR::Print, IR::Sequence, IR::Conditional, IR::Return, IR::Operation, IR::NilCheck,
                IR::Loop, IR::LoopExit, IR::BlockExit,
                IR::BlockBody, IR::Protected, IR::Raise, IR::Retry, IR::ExceptionValue, IR::CallError
             emit_flow(node, lines)
@@ -396,11 +402,9 @@ module Rubast
         def emit_body(node, lines)
           if node.is_a?(IR::Print)
             value = emit_value(emit_expression(node.value, lines), lines)
-            lines << "    runtime.print_scalar(#{value}.clone());"
+            lines << "    runtime.checked_io(\"kernel_p\", Value::Stream(\"stdout\"), " \
+                     "vec![#{value}.clone()], #{location(node.span)})?;"
             value
-          elsif node.is_a?(IR::Puts)
-            lines << "    runtime.puts(#{emit_expression(node.value, lines)});"
-            "Value::Nil"
           else
             node.expressions[0...-1].each { |expression| emit_statement(expression, lines) }
             node.expressions.empty? ? "Value::Nil" : emit_expression(node.expressions.last, lines)
