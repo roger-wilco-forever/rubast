@@ -412,14 +412,13 @@ Feature: Nonlocal return from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 3
     And no Rust project was created
 
-  Scenario: Fresh arrays in a return value remain unsupported inside a block
+  Scenario: Unused finite block returns can contain a fresh array
     Given the Ruby source is:
       """
       class Finder; def run; 1.times { return [1] }; end; end
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: A dead return cannot make an infinite block body acceptable
     Given the Ruby source is:

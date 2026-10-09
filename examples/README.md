@@ -6,7 +6,7 @@ The small examples at the root demonstrate supported constructs: [interactive in
 
 ## Realistic workload corpus
 
-The entry programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. All ten run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. These failures are progress indicators, not claims of support. Money values use integer cents.
+The entry programs under `workloads/` describe small application tasks. They intentionally include useful Ruby outside the current subset. The original ten run successfully on CRuby with the documented inputs; three currently fail Rubast compilation. Two additional bounded batch fixtures exercise stage 21. These failures are progress indicators, not claims of support. Money values use integer cents.
 
 Observed after completion of stage 16 on 2026-10-09:
 
@@ -115,3 +115,12 @@ mkdir -p target/receipt-demo
 # stdout: Customer: Receipt for Zoë / Total: 1250 (two lines)
 # stderr: Saved 29 bytes to receipt.txt
 ```
+
+
+## Practical collection batches (stage 21)
+
+[order_batch.rb](workloads/order_batch.rb) creates independent line items and nested note arrays under literal iteration, then totals a bounded, runtime-dependent array of charges. With `gift` input it prints `tea:3:packed!`, `coffee:2:packed`, and `lines:3 total:3350 cents`; other input or EOF omits the gift charge (`lines:2 total:3150 cents`).
+
+[log_batch.rb](workloads/log_batch.rb) reads at most three lines and filters `ok`/`error` entries. It uses runtime String hash lookup and bounded array traversal. Input `ok\nerror\nok\n` prints accepted/rejected/accepted and `processed:3 successful:2 failed:1`; EOF prints `processed:0 successful:0 failed:0`. Unknown statuses are ignored. [Collection acceptance scenarios](../features/practical_collections.feature) compare both programs with CRuby; the order example also builds a retained Rust project.
+
+These bounded batches supplement the unchanged original streaming log and shopping-cart programs. They do not establish unbounded counters, Symbol-to-Proc aggregation, dynamic keys, traversal growth, or reclaimed heap storage; [the selected contract](../docs/practical-collections.md) records those limits.

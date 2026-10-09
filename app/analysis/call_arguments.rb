@@ -108,14 +108,6 @@ module Rubast
                      safe_navigation: false, span: span)
       end
 
-      def argument_key(key, span)
-        if key.first == :symbol
-          IR::SymbolLiteral.new(value: key.last.encode(Encoding::UTF_8), span: span)
-        else
-          IR::IntegerLiteral.new(value: key.last, span: span)
-        end
-      end
-
       module Copies
         private
 

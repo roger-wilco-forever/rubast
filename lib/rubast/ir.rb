@@ -77,7 +77,9 @@ module Rubast
     Block = Data.define(:parameters, :locals, :body, :span)
     BlockCall = Data.define(:call, :block, :result_type, :span)
     Iterator = Data.define(:exit_id, :name, :family, :receiver, :parameters, :locals, :steps, :result_type, :span)
-    BlockStep = Data.define(:index, :body, :span)
+    BlockStep = Data.define(:index, :body, :span, :guarded) do
+      def initialize(guarded: false, **attributes) = super
+    end
     Super = Data.define(:arguments, :forward_arguments, :block, :span) do
       def initialize(arguments:, forward_arguments:, span:, block: nil)
         super

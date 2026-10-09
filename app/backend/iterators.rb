@@ -17,16 +17,38 @@ module Rubast
         traced_result([caller, builtin], lines) do |_statements|
           with_target("block_exit_#{node.exit_id}") do
             body = []
-            results = node.steps.map { |step| emit_iterator_step(node, step, receiver, body) }
-            result = if node.name == :map
-                       emit_value("runtime.new_array(vec![#{results.join(', ')}])", body)
-                     else
-                       "#{receiver}.clone()"
-                     end
+            result = emit_iterator_steps(node, receiver, body)
             body << "    #{result}"
             "'block_exit_#{node.exit_id}: {\n#{body.join("\n")}\n    }"
           end
         end
+      end
+
+      def emit_iterator_steps(node, receiver, lines)
+        results = "map_values_#{@next_temp}"
+        @next_temp += 1
+        lines << "    let mut #{results}: Vec<Value> = Vec::new();" if node.name == :map
+        node.steps.each do |step|
+          statements = []
+          value = emit_iterator_step(node, step, receiver, statements)
+          statements << "    #{results}.push(#{value});" if node.name == :map
+          if step.guarded
+            condition = iterator_guard(node, step, receiver)
+            lines << "    if Runtime::truthy(&#{condition}) {\n#{statements.join("\n")}\n    }"
+          else
+            lines.concat(statements)
+          end
+        end
+        node.name == :map ? emit_value("runtime.new_array(#{results})", lines) : "#{receiver}.clone()"
+      end
+
+      def iterator_guard(node, step, receiver)
+        count = if node.family == :integer
+                  "#{receiver}.clone()"
+                else
+                  "runtime.array_operation(\"length\", #{receiver}.clone(), vec![])"
+                end
+        "Runtime::binary(\"<\", Value::Integer(#{step.index}), #{count})"
       end
 
       def emit_iterator_step(node, step, receiver, lines)

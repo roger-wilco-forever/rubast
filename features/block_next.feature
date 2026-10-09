@@ -341,14 +341,13 @@ Feature: Next from literal blocks
     Then the diagnostic has code "E_UNSUPPORTED" at line 1
     And no Rust project was created
 
-  Scenario: Fresh arrays in next values remain unsupported
+  Scenario: Finite iterators accept fresh arrays in next values
     Given the Ruby source is:
       """
       1.times { next [1] }
       """
-    When I emit a Rust project
-    Then the diagnostic has code "E_UNSUPPORTED" at line 1
-    And no Rust project was created
+    When I run Rubast
+    Then stdout, stderr, and exit status match CRuby
 
   Scenario: Different object next results require unsupported joins
     Given the Ruby source is:

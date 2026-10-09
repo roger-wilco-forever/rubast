@@ -266,11 +266,13 @@ Refresh the stage 19 release baseline using the existing application workloads, 
 
 **Verification:** bin/verify passed: RuboCop (94 files), 6 RSpec examples, 998 Cucumber scenarios (3,491 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Profiling self-checks, strict GCC compilation, Python byte-compilation, sample counts, retained binary hashes, unchanged workload/runner hashes, native metadata inventory, and documentation links were checked separately. The final paired timing window, profiling, and full verification ran separately.
 
-### 21. Practical collections — planned
+### 21. Practical collections — complete
 
 Add selected String hash keys, traversal of variable-sized collections, and fresh objects/collections inside loops. Use order processing and log analysis to select the concrete APIs. Define runtime shape validation, key identity/mutation, traversal changes, and allocation limits before accepting each operation.
 
 **Acceptance:** realistic workloads compare with CRuby, including aliases, changed collection sizes, and failure paths. Allocation remains explicitly bounded until stage 22 provides reclamation; no unbounded-allocation claim is made.
+
+**Implemented selection:** literal String insertion keys and runtime String lookups; branch-dependent bounded array lengths with guarded each/map/times; fresh object/collection storage inside finite built-in iterators. Traversal length mutation, computed String insertion, and allocation under while/until remain diagnostics. Analysis budgets are 1,000 block validations, 10,000 bounded-body arena allocations, and 10,000 array slots. See [the contract](practical-collections.md), [order batch](../examples/workloads/order_batch.rb), [log batch](../examples/workloads/log_batch.rb), and [differential scenarios](../features/practical_collections.feature). **Verification:** final bin/verify passed: RuboCop (96 files), 6 RSpec examples, 1,031 Cucumber scenarios (3,621 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Initial new support and the allocation ceiling failed before implementation; former finite-allocation boundaries retain their source and now execute against CRuby. Workload checks pin successful reference outputs as well as stdout/stderr/status comparisons. A retained release order binary matches CRuby for gift, ordinary input, and EOF; guarded semantic IR serialization and documentation links were checked separately. Performance benchmarks were not rerun.
 
 ### 22. Memory management — planned
 
@@ -292,4 +294,4 @@ Build on closures to add selected define_method, computed send selectors, and ad
 
 ## Next action
 
-Stage 20 is complete. Next implement stage 21's selected practical-collection contracts and bounded allocation, using realistic order/log workloads to choose each API. Complete its checks, documentation, commit, and push before starting stage 22.
+Stage 21 is complete. Next implement stage 22: select a reclamation mechanism, define roots across calls/blocks/exits, and verify reachable aliases and cycles while measuring retained memory. Complete its checks, documentation, commit, and push before starting stage 23.

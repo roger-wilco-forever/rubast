@@ -220,7 +220,8 @@ module Rubast
 
         def merge_fields(object, maps, origin)
           fields = maps.flat_map(&:keys).uniq.to_h do |name|
-            [name, join_types(maps.map { |map| map[name] }, origin)]
+            entries = array_type?(object) && name.is_a?(Integer) ? maps.select { |map| map.key?(name) } : maps
+            [name, join_types(entries.map { |map| map[name] }, origin)]
           end
           object.fields.replace(Hash.new(maps.first.default).merge(fields))
         end
@@ -449,6 +450,7 @@ module Rubast
         end
 
         def object_type(name, default)
+          record_bounded_allocation
           type = IR::ObjectType.new(class_name: name, fields: Hash.new(default))
           @objects << type
           type
@@ -570,7 +572,7 @@ module Rubast
           class_type = type_of(receiver, locals)
           check_method_visibility(node, class_type, nil)
           namespace = class_type.class_name.name
-          unsupported(node) if @loop_depth&.positive? || @namespace_kinds[namespace] != :class
+          unsupported(node) if loop_allocation? || @namespace_kinds[namespace] != :class
           type = object_type(namespace, :nil)
           owner, method = lookup_method(namespace, :initialize)
           invocation = validate_invocation(node, method, locals, type, owner: owner)

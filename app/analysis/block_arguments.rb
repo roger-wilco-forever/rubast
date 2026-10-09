@@ -89,7 +89,7 @@ module Rubast
           call = node.call
           check_method_visibility(call, class_type, nil)
           name = class_type.class_name.name
-          unsupported(node) if @loop_depth&.positive?
+          unsupported(node) if loop_allocation?
           unsupported(node) unless call.name == :new && @namespace_kinds[name] == :class
           type = object_type(name, :nil)
           owner, method = lookup_method(name, :initialize)

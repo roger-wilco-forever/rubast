@@ -2,7 +2,7 @@ use crate::{Location, Outcome, Runtime, Value};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
 
-mod inspection;
+pub(crate) mod inspection;
 
 impl Runtime {
     pub fn checked_io(

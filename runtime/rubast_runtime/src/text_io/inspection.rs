@@ -11,7 +11,7 @@ pub(super) fn inspect(value: Value) -> String {
     }
 }
 
-fn inspect_string(text: &str) -> String {
+pub(crate) fn inspect_string(text: &str) -> String {
     let mut output = String::from("\"");
     let mut characters = text.chars().peekable();
     while let Some(character) = characters.next() {

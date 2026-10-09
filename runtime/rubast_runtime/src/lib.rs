@@ -11,7 +11,7 @@ pub use exceptions::{Flow, Location, Outcome};
 #[derive(Debug)]
 pub struct RubyString {
     text: RefCell<String>,
-    frozen: Option<&'static str>,
+    frozen: Option<String>,
 }
 impl Deref for RubyString {
     type Target = RefCell<String>;
@@ -43,7 +43,7 @@ impl Value {
     pub fn frozen(text: String, inspected: &'static str) -> Self {
         Self::String(Rc::new(RubyString {
             text: RefCell::new(text),
-            frozen: Some(inspected),
+            frozen: Some(inspected.to_owned()),
         }))
     }
 
@@ -222,7 +222,10 @@ impl Runtime {
         };
         if text.frozen.is_some() && matches!(name, "<<" | "concat" | "replace" | "clear" | "chomp!")
         {
-            let message = format!("can't modify frozen String: {}", text.frozen.unwrap());
+            let message = format!(
+                "can't modify frozen String: {}",
+                text.frozen.as_ref().unwrap()
+            );
             if name != "<<" {
                 let label = match name {
                     "concat" => "String#concat",
@@ -413,6 +416,20 @@ impl Runtime {
                         if let Some(index) = slot {
                             entries[index].1 = value.clone();
                         } else {
+                            let key = if let Value::String(text) = &key {
+                                if text.frozen.is_some() {
+                                    key
+                                } else {
+                                    let content = text.borrow().clone();
+                                    let inspected = text_io::inspection::inspect_string(&content);
+                                    Value::String(Rc::new(RubyString {
+                                        text: RefCell::new(content),
+                                        frozen: Some(inspected),
+                                    }))
+                                }
+                            } else {
+                                key
+                            };
                             entries.push((key, value.clone()));
                         }
                         value

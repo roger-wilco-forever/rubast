@@ -51,9 +51,13 @@ module Rubast
         when IR::CallError then [[node.class_name, node.message, node.label, node.span]]
         when IR::BlockInvocation then [[node.invocation.class_name, invocation_name(node.invocation),
                                         block_signature(node.invocation.body)]]
-        when IR::Iterator then [[node.family, node.name, node.steps.length, nested]]
+        when IR::Iterator then [iterator_signature(node, nested)]
         else nested
         end
+      end
+
+      def self.iterator_signature(node, nested)
+        [node.family, node.name, node.steps.map(&:guarded), nested]
       end
 
       def self.invocation_name(node)

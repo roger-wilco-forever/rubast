@@ -5,9 +5,30 @@ module Rubast
     module Iterators
       # ponytail: specialize 1,000 invocations per validation; use loop summaries for larger workloads.
       MAX_STEPS = 1_000
+      MAX_ALLOCATIONS = 10_000
 
       module Bodies
         private
+
+        def loop_allocation?
+          (@loop_depth || 0) > (@bounded_loop_depth || 0)
+        end
+
+        def record_bounded_allocation
+          return unless @allocation_origin
+
+          @bounded_allocations = (@bounded_allocations || 0) + 1
+          unsupported(@allocation_origin) if @bounded_allocations > MAX_ALLOCATIONS
+        end
+
+        def bounded_iterator_body(block, type, locals)
+          saved = [@bounded_loop_depth, @allocation_origin]
+          @bounded_loop_depth = (@bounded_loop_depth || 0) + 1
+          @allocation_origin = block
+          iterator_body(block, type, locals)
+        ensure
+          @bounded_loop_depth, @allocation_origin = saved
+        end
 
         def iterator_body(block, value_type, locals, exit_context: @block_exit_context)
           saved_context = [@loop_context, @block_exit_context]
@@ -59,7 +80,7 @@ module Rubast
           before = snapshot(locals)
           exit_counts = flow_exit_counts
           with_block_exit_context(new_block_context(block, locals)) do
-            iterator_body(block, :unknown, locals)
+            bounded_iterator_body(block, :unknown, locals)
           end
           after = snapshot(locals) if summarize
         ensure
@@ -83,11 +104,11 @@ module Rubast
 
         def iterator_count(type, node)
           if node.call.name == :times
-            unsupported(node) unless type.is_a?(IR::IntegerType) && type.minimum == type.maximum
-            [type.minimum, 0].max
+            unsupported(node) unless type.is_a?(IR::IntegerType)
+            [type.maximum, 0].max
           else
             unsupported(node) unless array_type?(type)
-            array_length(type, node)
+            type.fields.fetch(:length).maximum
           end
         end
 
@@ -96,7 +117,7 @@ module Rubast
         end
 
         def check_iterator_length(type, count, node)
-          unsupported(node) if array_type?(type) && array_length(type, node) != count
+          unsupported(node) if array_type?(type) && type.fields.fetch(:length) != count
         end
       end
 
@@ -109,7 +130,7 @@ module Rubast
         unless call.receiver && !call.safe_navigation && call.arguments.empty? && %i[each times map].include?(call.name)
           unsupported(node)
         end
-        unsupported(node) if call.name == :map && @loop_depth&.positive?
+        unsupported(node) if call.name == :map && loop_allocation?
       end
 
       def validate_iterator_receiver(node, receiver, type, locals)
@@ -130,7 +151,8 @@ module Rubast
       end
 
       def complete_iterator(node, type, steps, context, locals)
-        normal = steps.last&.body&.result_type == :never ? :never : iterator_result(node, type, steps)
+        last = steps.last
+        normal = last&.body&.result_type == :never && !last.guarded ? :never : iterator_result(node, type, steps)
         types = context.fetch(:exits).map(&:first)
         states = context.fetch(:exits).map(&:last)
         unless normal == :never
@@ -144,17 +166,31 @@ module Rubast
       def iterator_steps(node, type, locals)
         count = iterator_count(type, node)
         unsupported(node) if count > MAX_STEPS
-        @block_exit_context[:traversal] = [type, count]
+        shape = array_type?(type) ? type.fields.fetch(:length) : type
+        @block_exit_context[:traversal] = [type, shape]
         check_detached_block(node.block, locals) if count.zero?
         steps = []
         count.times do |index|
-          check_iterator_length(type, count, node)
-          body = iterator_body(node.block, iterator_item(type, index, node), locals)
-          check_iterator_length(type, count, node)
-          steps << IR::BlockStep.new(index: index, body: body, span: node.block.span)
-          break if body.result_type == :never
+          step = iterator_step(node, type, shape, index, locals)
+          steps << step
+          break if step.body.result_type == :never && !step.guarded
         end
         steps
+      end
+
+      def iterator_step(node, type, shape, index, locals)
+        check_iterator_length(type, shape, node)
+        guarded = index >= [shape.minimum, 0].max
+        before = snapshot(locals) if guarded
+        body = bounded_iterator_body(node.block, iterator_item(type, index, node), locals)
+        check_iterator_length(type, shape, node)
+        join_optional_step(before, body, locals, node) if guarded
+        IR::BlockStep.new(index: index, body: body, span: node.block.span, guarded: guarded)
+      end
+
+      def join_optional_step(before, body, locals, node)
+        states = body.result_type == :never ? [before] : [before, snapshot(locals)]
+        merge_states(states, locals, node)
       end
 
       def iterator_result(node, receiver_type, steps)
@@ -162,7 +198,8 @@ module Rubast
 
         array = object_type(:Array, :nil)
         steps.each_with_index { |step, index| array.fields[index] = step.body.result_type }
-        set_array_length(array, steps.length, node)
+        length = receiver_type.fields.fetch(:length)
+        array.fields[:length] = integer_type(length.minimum, length.maximum, node)
         array
       end
     end

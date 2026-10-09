@@ -171,7 +171,6 @@ Feature: Preserve extended argument boundaries
       | class Choice; def value; 7; end; end; Choice.new.value(&:to_s) |
       | class Choice; def value(*values); 7; end; end; class Input; def to_a; [7]; end; end; Choice.new.value(*Input.new) |
       | class Choice; def value(**values); 7; end; end; class Input; def to_hash; {count: 7}; end; end; Choice.new.value(**Input.new) |
-      | class Choice; def value(values = []); values.length; end; end; choice = Choice.new; 1.times { choice.value } |
       | class Choice; def value(*values); 7; end; end; Choice.new.value(*(if true; [7]; else; [7, 9]; end)) |
 
   Scenario: Named block failures follow the Ruby exception hierarchy

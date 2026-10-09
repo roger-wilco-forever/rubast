@@ -14,7 +14,9 @@ module Rubast
           type.is_a?(IR::ObjectType) && type.class_name == :Hash
         end
 
-        def hash_key(type, origin)
+        def hash_key(type, origin, expression = nil)
+          return [:string, expression.value].freeze if expression.is_a?(IR::StringLiteral)
+
           case type
           when IR::SymbolType then [:symbol, type.name].freeze
           when IR::IntegerType
@@ -25,7 +27,9 @@ module Rubast
         end
 
         def hash_key_type(key)
-          if key.first == :symbol
+          if key.first == :string
+            :frozen_string
+          elsif key.first == :symbol
             IR::SymbolType.new(name: key.last)
           else
             IR::IntegerType.new(minimum: key.last,
@@ -35,6 +39,14 @@ module Rubast
 
         def hash_shapes(hash)
           members(hash.fields.fetch(:shape))
+        end
+
+        def argument_key(key, span)
+          case key.first
+          when :symbol then IR::SymbolLiteral.new(value: key.last.encode(Encoding::UTF_8), span: span)
+          when :string then IR::StringLiteral.new(value: key.last, frozen: true, span: span)
+          else IR::IntegerLiteral.new(value: key.last, span: span)
+          end
         end
 
         def write_hash(hash, key, value, origin)
@@ -62,7 +74,7 @@ module Rubast
       end
 
       def explicit_loop_hash?(node)
-        @loop_depth&.positive? && !node.is_a?(IR::ParameterHash)
+        loop_allocation? && !node.is_a?(IR::ParameterHash)
       end
 
       def validate_hash(node, locals)
@@ -72,7 +84,7 @@ module Rubast
         elements, types = validate_arguments(node.elements, names, locals)
         keys = (0...elements.length).step(2).map do |index|
           type = types.fetch(index)
-          %i[unknown never].include?(type) ? type : hash_key(type, node)
+          %i[unknown never].include?(type) ? type : hash_key(type, node, elements[index])
         end
         result = if types.value?(:never)
                    :never
@@ -109,15 +121,29 @@ module Rubast
 
       def hash_index_result(node, hash, types)
         type = types.fetch(0)
-        key = type == :unknown ? :unknown : hash_key(type, node)
+        return dynamic_string_lookup(node, hash) if dynamic_string_key?(node, type)
+
+        key = type == :unknown ? :unknown : hash_key(type, node, node.arguments.first)
         return write_hash(hash, key, types.fetch(1), node) if node.name == :[]=
         return :boolean if node.name == :key?
 
         key == :unknown || hash.fields[:shape] == :unknown ? :unknown : hash.fields[key]
       end
 
+      def dynamic_string_key?(node, type)
+        node.name != :[]= && string_type?(type) && !node.arguments.first.is_a?(IR::StringLiteral)
+      end
+
+      def dynamic_string_lookup(node, hash)
+        return :boolean if node.name == :key?
+        return :unknown if hash.fields[:shape] == :unknown
+
+        keys = hash_shapes(hash).flat_map(&:keys).uniq.select { |key| key.first == :string }
+        join_types([:nil, *keys.map { |key| hash.fields[key] }], node)
+      end
+
       def hash_array(hash, node)
-        unsupported(node) if @loop_depth&.positive?
+        unsupported(node) if loop_allocation?
         return :unknown if hash.fields[:shape] == :unknown
 
         shapes = hash_shapes(hash)

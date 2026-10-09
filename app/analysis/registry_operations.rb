@@ -7,7 +7,7 @@ module Rubast
         private
 
         def array_concat_type(left, right, origin)
-          unsupported(origin) if @loop_depth&.positive? || !array_type?(right)
+          unsupported(origin) if loop_allocation? || !array_type?(right)
           first = array_length(left, origin)
           second = array_length(right, origin)
           result = object_type(:Array, :nil)
@@ -37,7 +37,7 @@ module Rubast
             next if item == :unknown || !item.is_a?(IR::ObjectType)
 
             unsupported(origin) unless array_type?(item) && !path.include?(item.object_id)
-            array_length(item, origin).times do |index|
+            item.fields.fetch(:length).maximum.times do |index|
               check_array_equality(item.fields.fetch(index), origin, [*path, item.object_id])
             end
           end

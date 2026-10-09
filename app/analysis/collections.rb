@@ -13,7 +13,7 @@ module Rubast
         private
 
         def validate_array(node, locals)
-          unsupported(node) if !node.is_a?(IR::ParameterArray) && @loop_depth&.positive?
+          unsupported(node) if !node.is_a?(IR::ParameterArray) && loop_allocation?
           unsupported(node) if node.elements.length > MAX_ARRAY_LENGTH
           names = (0...node.elements.length).to_a
           elements, types = validate_arguments(node.elements, names, locals)
@@ -41,10 +41,10 @@ module Rubast
           return array_equal_type(array, types.fetch(0), node) if %i[== !=].include?(node.name)
           return unknown_array_result(node, array, types) if array.fields[:length] == :unknown
 
-          length = array_length(array, node)
+          length = array.fields.fetch(:length)
           case node.name
           when :[] then array_read_type(types.fetch(0), array, length, node)
-          when :[]= then array_write_type(types, array, length, node)
+          when :[]= then array_write_type(types, array, array_length(array, node), node)
           when :push, :<< then array_push_type(types, array, length, node)
           else unsupported(node)
           end
@@ -61,13 +61,18 @@ module Rubast
         def array_read_type(index, array, length, origin)
           unsupported(origin) unless index.is_a?(IR::IntegerType)
           range = index.minimum..index.maximum
-          values = (0...length).filter_map do |slot|
-            next unless range.cover?(slot) || range.cover?(slot - length)
+          values = (0...length.maximum).filter_map do |slot|
+            next unless selected_array_slot?(slot, range, length)
 
             array.fields[slot]
           end
-          values << :nil if index.minimum < -length || index.maximum >= length
+          values << :nil if index.minimum < -length.minimum || index.maximum >= length.minimum
           join_types(values, origin)
+        end
+
+        def selected_array_slot?(slot, range, length)
+          negative = (slot - length.maximum)..(slot - [length.minimum, slot + 1].max)
+          range.cover?(slot) || (negative.begin <= range.end && range.begin <= negative.end)
         end
 
         def array_write_type(types, array, length, origin)
@@ -82,8 +87,16 @@ module Rubast
         end
 
         def array_push_type(types, array, length, origin)
-          set_array_length(array, length + types.length, origin)
-          types.each_value.with_index { |type, index| array.fields[length + index] = type }
+          maximum = length.maximum + types.length
+          unsupported(origin) if maximum > MAX_ARRAY_LENGTH
+          types.each_value.with_index do |type, index|
+            (length.minimum..length.maximum).each do |size|
+              slot = size + index
+              previous = array.fields.key?(slot) ? [array.fields[slot]] : []
+              array.fields[slot] = join_types([*previous, type], origin)
+            end
+          end
+          array.fields[:length] = integer_type(length.minimum + types.length, maximum, origin)
           array
         end
 

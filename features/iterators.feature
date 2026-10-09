@@ -267,11 +267,6 @@ Feature: Bounded inline iterators with lexical block locals
       | "Ada".each { puts 1 }                                                                      |
       | {}.each { puts 1 }                                                                          |
       | values = [1]; values.each { values.push(2) }                                                 |
-      | [1].each { [] }                                                                            |
-      | [1].map { {} }                                                                             |
-      | class Cell; end; [1].each { Cell.new }                                                      |
-      | values = [1]; values.each { values.map { puts 1 } }                                         |
-      | count = if gets; 1; else; 2; end; count.times { puts 1 }                                    |
       | 1001.times { puts 1 }                                                                       |
       | 33.times { 33.times { puts 1 } }                                                            |
       | [1].each { while true; end }                                                               |

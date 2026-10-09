@@ -180,7 +180,6 @@ Feature: Symbols and ordered shared hashes with immutable built-in keys
 
     Examples:
       | source                                                                             |
-      | values = { "name" => 1 }                                                           |
       | values = { nil => 1 }                                                              |
       | values = { true => 1 }                                                             |
       | values = {}; values[[]] = 1                                                        |
