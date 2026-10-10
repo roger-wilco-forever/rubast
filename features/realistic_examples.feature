@@ -52,7 +52,7 @@ Feature: Track realistic programs and their current compiler blockers
       """
 
   @unsupported_examples
-  Scenario: Shopping-cart totals need Symbol-to-Proc block aggregation
+  Scenario: Shopping-cart totals need Array sum aggregation
     Given I use the example "workloads/shopping_cart.rb"
     When I emit a Rust project
     Then the diagnostic has code "E_UNSUPPORTED" at line 25

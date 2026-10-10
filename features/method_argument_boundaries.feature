@@ -168,7 +168,6 @@ Feature: Preserve extended argument boundaries
       | class Choice; def value(&callback); helper(callback); end; def helper(value); 7; end; end; Choice.new.value { 7 } |
       | class Choice; def value(&callback); callback.lambda?; end; end; Choice.new.value { 7 } |
       | class Choice; def value(&callback); [7].each(&callback); end; end; Choice.new.value { 7 } |
-      | class Choice; def value; 7; end; end; Choice.new.value(&:to_s) |
       | class Choice; def value(*values); 7; end; end; class Input; def to_a; [7]; end; end; Choice.new.value(*Input.new) |
       | class Choice; def value(**values); 7; end; end; class Input; def to_hash; {count: 7}; end; end; Choice.new.value(**Input.new) |
       | class Choice; def value(*values); 7; end; end; Choice.new.value(*(if true; [7]; else; [7, 9]; end)) |

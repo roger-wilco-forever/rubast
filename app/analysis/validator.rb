@@ -95,7 +95,8 @@ module Rubast
           case node
           when IR::Call then validate_call(node, locals)
           when IR::BlockCall then validate_block_call(node, locals)
-          when IR::BlockPass then validate_block_pass(node, locals)
+          when IR::BlockPass then validate_block_argument(node, locals)
+          when IR::SymbolCall then validate_symbol_call(node, locals)
           when IR::Yield then validate_yield(node, locals)
           else validate_super(node, locals)
           end
@@ -540,7 +541,8 @@ module Rubast
           when IR::InterpolatedString
             parts = node.parts.map { |part| validate_output(part, locals) }
             IR::InterpolatedString.new(parts: parts.freeze, span: node.span)
-          when IR::Call, IR::Super, IR::BlockCall, IR::BlockPass, IR::Yield then validate_dispatch(node, locals)
+          when IR::Call, IR::Super, IR::BlockCall, IR::BlockPass, IR::Yield, IR::SymbolCall
+            validate_dispatch(node, locals)
           when IR::ArrayLiteral, IR::HashLiteral, IR::ParameterArray, IR::ParameterHash, IR::IndexWrite
             validate_collection_expression(node, locals)
           else unsupported(node)
@@ -644,7 +646,8 @@ module Rubast
              IR::Yield, IR::YieldInvoke, IR::BlockInvocation, IR::BlockBody, IR::Protected, IR::Raise,
              IR::ExceptionValue, IR::CallError, IR::ArgumentCopy, IR::ParameterArray, IR::ParameterHash,
              IR::ArgumentEvaluation, IR::BlockPass, IR::ConstantGet, IR::ConstantSet, IR::NamespaceBody,
-             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad, IR::IOReference, IR::Reflection
+             IR::ClassValue, IR::Setter, IR::Print, IR::NilCheck, IR::SourceLoad, IR::IOReference, IR::Reflection,
+             IR::SymbolInvoke
           node.result_type
         end
       end

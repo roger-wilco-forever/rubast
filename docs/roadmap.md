@@ -286,11 +286,25 @@ Reclaim unreachable arena objects while preserving aliases and cycles. Define ro
 
 **Verification:** Final bin/verify passed: RuboCop (97 files), 6 RSpec examples, 1,047 Cucumber scenarios (3,677 steps), Rust formatting, and seven Cargo reclamation tests. The initial six new differential scenarios failed before implementation. The final focused feature passes 16 scenarios and 56 steps. Retained release Ruby output matches CRuby; semantic IR graph references, the memory Builtin, benchmark artifact/source hashes, and documentation links were checked separately. Stage 18/20 timings and CRuby memory were not remeasured.
 
-### 23. Closures — planned
+### 23. Closures — in progress
 
 Implement selected Proc/lambda values, retained blocks, and Symbol-to-Proc. Specify captured mutable bindings, lexical self, lifetime, arity, and the distinct return/break rules before expanding the current literal-block contract.
 
 **Acceptance:** escaped closures preserve captures after their defining call finishes, and supported exits/errors match CRuby. Unsupported closure shapes remain located diagnostics.
+
+#### 23.1 Literal Symbol callbacks — complete
+
+Direct literal passes such as map(&:subtotal) and each(&:pack) reuse bounded block expansion. Exactly one positional callback argument supplies the receiver; supported public user/native selectors take no additional arguments. User methods, constructors, super, and active named forwarding retain evaluation order, aliases, normal method returns, and error behavior. SymbolInvoke participates in specialization and source mapping; callback dispatch uses the receiving call-site frame without inventing a Ruby block frame. Computed/general conversion, missing/extra callback arguments, retained callbacks, Proc/lambda values, and Array#sum remain diagnostics. See [the contract](symbol-callbacks.md), [packing batch](../examples/workloads/callback_batch.rb), and [execution/boundary scenarios](../features/symbol_to_proc.feature).
+
+**Verification:** bin/verify passed: RuboCop (100 files), 6 RSpec examples, 1,076 Cucumber scenarios (3,776 steps), Rust formatting, and seven Cargo reclamation tests. The first 18 differential cases failed before implementation; ten unsupported shapes retained their diagnostics. Focused callback/argument checks passed 62 scenarios (218 steps); callback/realistic-example checks passed 38 scenarios (144 steps) before the final unchanged former-boundary case was added. The retained release packing binary matches CRuby stdout, stderr, and status. Its semantic IR contains six SymbolInvoke nodes with valid graph references; all six emitted callback sites have Ruby source mappings. Documentation links were checked. Performance and memory benchmarks were not rerun.
+
+#### 23.2 Proc/lambda values and shared captures — planned
+
+Define mutable captured binding storage, lexical self, closure identity, and GC edges before accepting escaping values. Start with a returned counter after its factory exits and sibling closures sharing a binding. Then specify selected creation/call forms, Proc versus lambda arity, and local/nonlocal return/break with expired targets. Compare successful calls and errors with CRuby, including collection while a closure is the only root.
+
+#### 23.3 Retained blocks and closure boundaries — planned
+
+Extend named block storage and forwarding beyond the active receiving call once the shared capture model exists. Check defining/receiving lifetimes, nested closures, aliases, cycles, exception cleanup, and unsupported escape shapes. Complete the full stage-23 acceptance, documentation, verification, commit, and push before stage 24.
 
 ### 24. Extended metaprogramming — planned
 
@@ -300,4 +314,4 @@ Build on closures to add selected define_method, computed send selectors, and ad
 
 ## Next action
 
-Stage 22 is complete. Next implement stage 23: select Proc/lambda and retained-block shapes, specify captured state/lifetime and exit/arity rules, and add CRuby comparisons before expanding the current literal-block contract. Complete its checks, documentation, commit, and push before starting stage 24.
+Checkpoint 23.1 is complete. Next implement 23.2: select Proc/lambda creation and call shapes, define shared captured bindings and GC edges, then add returned-counter and sibling-capture CRuby comparisons before expanding the accepted subset. Stage 23 remains in progress; retained closures and their exit/lifetime rules must pass before stage 24.

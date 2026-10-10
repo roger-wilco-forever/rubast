@@ -73,6 +73,8 @@ module Rubast
     BlockType = Data.define(:id)
     BlockValue = Data.define(:id, :span)
     BlockPass = Data.define(:call, :value, :result_type, :span)
+    SymbolCall = Data.define(:name, :receiver, :span)
+    SymbolInvoke = Data.define(:body, :result_type, :span)
     ArgumentEvaluation = Data.define(:arguments, :names, :body, :result_type, :span)
     Block = Data.define(:parameters, :locals, :body, :span)
     BlockCall = Data.define(:call, :block, :result_type, :span)

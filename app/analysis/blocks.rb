@@ -129,6 +129,7 @@ module Rubast
         def validate_block_execution(node, context, locals)
           pack = call_payload(node, locals)
           unsupported(node) if pack[:unknown]
+          check_symbol_arguments(context, pack, node)
           scope = locals.merge(pack[:types])
           arguments = pack[:positional].dup
           arguments << parameter_hash(pack[:keywords], node.span) unless pack[:keywords].empty?
@@ -183,6 +184,7 @@ module Rubast
 
       include Exits
       include Captures
+      include SymbolBlocks
       include Yielding
 
       private

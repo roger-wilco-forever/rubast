@@ -7,8 +7,9 @@ module Rubast
         private
 
         def validate_super_invocation(node, call, receiver, target, locals)
-          if node.block.is_a?(IR::Block)
-            literal = IR::BlockCall.new(call: call, block: node.block, result_type: nil, span: node.span)
+          if node.block.is_a?(IR::Block) || node.block.is_a?(IR::SymbolLiteral)
+            block = node.block.is_a?(IR::SymbolLiteral) ? symbol_block(node.block) : node.block
+            literal = IR::BlockCall.new(call: call, block: block, result_type: nil, span: node.span)
             return validate_user_block(literal, receiver, @receiver_type, target, locals)
           end
           unless @yield_context || node.block

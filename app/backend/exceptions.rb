@@ -7,6 +7,8 @@ module Rubast
         private
 
         def location(span, label = frame_label)
+          return "#{@symbol_call_site.last}.clone()" if @symbol_call_site&.first == span && label == frame_label
+
           "Location::new(#{Rust.rust_string(span.path)}, #{span.line}, #{Rust.rust_string(label)})" \
             ".highlight(#{Rust.rust_string(span.highlight)})" \
             ".name_highlight(#{Rust.rust_string(span.name_highlight)})"

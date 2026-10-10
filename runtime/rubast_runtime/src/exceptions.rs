@@ -149,6 +149,12 @@ impl Runtime {
         self.frames.pop();
     }
 
+    pub fn take_call_site(&mut self) -> Location {
+        self.frames
+            .pop()
+            .expect("callback requires a receiving frame")
+    }
+
     pub fn matches(error: &ErrorRef, classes: &[&str]) -> bool {
         let mut name = Some(error.borrow().class);
         while let Some(class) = name {

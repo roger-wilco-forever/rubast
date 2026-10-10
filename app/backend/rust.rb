@@ -39,6 +39,8 @@ module Rubast
         # Types can contain cycles; only resolved calls affect emitted dispatch.
         children = node.to_h.except(:span, :result_type).values
         nested = children.flat_map { |value| Array(value).flat_map { |child| dispatches(child) } }
+        return [[:symbol_proc, nested]] if node.is_a?(IR::SymbolInvoke)
+
         dispatch_signature(node, nested)
       end
 
@@ -315,6 +317,7 @@ module Rubast
         include Collections
         include Iterators
         include Blocks
+        include SymbolBlocks
         include Exceptions
         include Objects
         include Namespaces
@@ -364,7 +367,7 @@ module Rubast
 
         def emit_mapped_expression(node, lines)
           case node
-          when IR::Reflection then emit_reflection(node, lines)
+          when IR::Reflection, IR::SymbolInvoke then emit_callback_or_reflection(node, lines)
           when IR::IntegerLiteral, IR::StringLiteral, IR::NilLiteral, IR::BooleanLiteral, IR::SymbolLiteral, IR::BlockValue,
                IR::IOReference
             Rust.literal(node)

@@ -169,12 +169,18 @@ module Rubast
       end
 
       def method_visible?(call, type, target)
+        return public_method?(type, call.name) if call.visibility == :public
+
         return true if call.visibility == :send || implicit_visibility?(call, target)
 
         chain = method_ancestors(type.class_name)
         visibility = method_visibility(type, call.name) || :public
         visibility == :public ||
           (visibility == :protected && protected_receiver?(chain, target ? target.first.key : type.class_name))
+      end
+
+      def public_method?(type, name)
+        (method_visibility(type, name) || :public) == :public
       end
     end
   end
