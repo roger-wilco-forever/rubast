@@ -4,6 +4,9 @@ use std::ops::Deref;
 use std::rc::Rc;
 
 mod exceptions;
+mod heap;
+use heap::Heap;
+pub use heap::ObjectHandle;
 mod text_io;
 use exceptions::ErrorRef;
 pub use exceptions::{Flow, Location, Outcome};
@@ -34,7 +37,7 @@ pub enum Value {
     Symbol(&'static str, &'static str),
     String(Rc<RubyString>),
     Exception(ErrorRef),
-    Object(usize),
+    Object(ObjectHandle),
     Block(usize),
     Stream(&'static str),
 }
@@ -85,8 +88,7 @@ enum Object {
 }
 
 pub struct Runtime {
-    // ponytail: retain objects until runtime drop; reclaim them when long-lived allocation matters.
-    objects: Vec<Object>,
+    objects: Heap,
     constants: HashMap<&'static str, Value>,
     identifiers: HashSet<&'static str>,
     frames: Vec<Location>,
@@ -96,12 +98,20 @@ pub struct Runtime {
 impl Runtime {
     pub fn new() -> Self {
         Self {
-            objects: Vec::new(),
+            objects: Heap::new(),
             constants: HashMap::new(),
             identifiers: HashSet::new(),
             frames: Vec::new(),
             exceptions: Vec::new(),
         }
+    }
+
+    pub fn collect_garbage(&mut self) -> usize {
+        self.objects.collect()
+    }
+
+    pub fn heap_stats(&self) -> (usize, usize) {
+        self.objects.stats()
     }
 
     pub fn truthy(value: &Value) -> bool {
@@ -189,7 +199,7 @@ impl Runtime {
         location: Location,
     ) -> Outcome {
         if name == "[]=" {
-            let Value::Object(id) = receiver else {
+            let Value::Object(id) = &receiver else {
                 unreachable!()
             };
             let Object::Array(values) = &self.objects[id] else {
@@ -255,14 +265,12 @@ impl Runtime {
     }
 
     pub fn new_object(&mut self) -> Value {
-        let id = self.objects.len();
-        self.objects.push(Object::Instance(HashMap::new()));
-        Value::Object(id)
+        self.objects.allocate(Object::Instance(HashMap::new()))
     }
 
     pub fn copy_argument(&mut self, kind: &str, value: Value) -> Value {
         if let Value::Object(id) = &value {
-            match (&self.objects[*id], kind) {
+            match (&self.objects[id], kind) {
                 (Object::Array(values), "array") => return self.new_array(values.clone()),
                 (Object::Hash(values), "hash") => return self.new_hash(values.clone()),
                 _ => {}
@@ -283,9 +291,7 @@ impl Runtime {
     }
 
     pub fn new_array(&mut self, values: Vec<Value>) -> Value {
-        let id = self.objects.len();
-        self.objects.push(Object::Array(values));
-        Value::Object(id)
+        self.objects.allocate(Object::Array(values))
     }
 
     pub fn array_operation(
@@ -298,10 +304,10 @@ impl Runtime {
             unreachable!("array operations require a proven array receiver");
         };
         if name == "+" {
-            let Value::Object(other) = arguments[0] else {
+            let Value::Object(other) = &arguments[0] else {
                 unreachable!()
             };
-            let Object::Array(left) = &self.objects[id] else {
+            let Object::Array(left) = &self.objects[&id] else {
                 unreachable!()
             };
             let Object::Array(right) = &self.objects[other] else {
@@ -314,7 +320,7 @@ impl Runtime {
             let equal = self.array_equal(&Value::Object(id), &arguments[0]);
             return Value::Bool(if name == "==" { equal } else { !equal });
         }
-        let Object::Array(values) = &mut self.objects[id] else {
+        let Object::Array(values) = &mut self.objects[&id] else {
             unreachable!("array operations require array storage");
         };
         match name {
@@ -355,7 +361,7 @@ impl Runtime {
     fn array_equal(&self, left: &Value, right: &Value) -> bool {
         if let (Value::Object(first), Value::Object(second)) = (left, right) {
             if let (Object::Array(left), Object::Array(right)) =
-                (&self.objects[*first], &self.objects[*second])
+                (&self.objects[first], &self.objects[second])
             {
                 return left.len() == right.len()
                     && left.iter().zip(right).all(|(a, b)| self.array_equal(a, b));
@@ -365,9 +371,7 @@ impl Runtime {
     }
 
     pub fn new_hash(&mut self, pairs: Vec<(Value, Value)>) -> Value {
-        let id = self.objects.len();
-        self.objects.push(Object::Hash(Vec::new()));
-        let receiver = Value::Object(id);
+        let receiver = self.objects.allocate(Object::Hash(Vec::new()));
         for (key, value) in pairs {
             self.hash_operation("[]=", receiver.clone(), vec![key, value]);
         }
@@ -383,7 +387,7 @@ impl Runtime {
         let Value::Object(id) = receiver else {
             unreachable!("hash operations require a proven hash receiver");
         };
-        let Object::Hash(entries) = &mut self.objects[id] else {
+        let Object::Hash(entries) = &mut self.objects[&id] else {
             unreachable!("hash operations require hash storage");
         };
         match name {
@@ -444,7 +448,7 @@ impl Runtime {
         let Value::Object(id) = receiver else {
             unreachable!("instance variables require an object");
         };
-        let Object::Instance(fields) = &self.objects[*id] else {
+        let Object::Instance(fields) = &self.objects[id] else {
             unreachable!("instance variables require instance storage");
         };
         fields.get(name).cloned().unwrap_or(Value::Nil)
@@ -454,7 +458,7 @@ impl Runtime {
         let Value::Object(id) = receiver else {
             unreachable!("instance variables require an object");
         };
-        let Object::Instance(fields) = &mut self.objects[*id] else {
+        let Object::Instance(fields) = &mut self.objects[id] else {
             unreachable!("instance variables require instance storage");
         };
         fields.insert(name, value.clone());

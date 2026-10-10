@@ -123,4 +123,8 @@ mkdir -p target/receipt-demo
 
 [log_batch.rb](workloads/log_batch.rb) reads at most three lines and filters `ok`/`error` entries. It uses runtime String hash lookup and bounded array traversal. Input `ok\nerror\nok\n` prints accepted/rejected/accepted and `processed:3 successful:2 failed:1`; EOF prints `processed:0 successful:0 failed:0`. Unknown statuses are ignored. [Collection acceptance scenarios](../features/practical_collections.feature) compare both programs with CRuby; the order example also builds a retained Rust project.
 
-These bounded batches supplement the unchanged original streaming log and shopping-cart programs. They do not establish unbounded counters, Symbol-to-Proc aggregation, dynamic keys, traversal growth, or reclaimed heap storage; [the selected contract](../docs/practical-collections.md) records those limits.
+These bounded batches supplement the unchanged original streaming log and shopping-cart programs. They do not establish unbounded counters, Symbol-to-Proc aggregation, dynamic keys, or traversal growth; [the selected contract](../docs/practical-collections.md) records those limits.
+
+## Reclaimed method batches (stage 22)
+
+[memory_batch.rb](workloads/memory_batch.rb) creates 200 discarded instance/hash/array cycles inside ordinary method calls, allowing automatic collection after method temporaries leave scope. It prints `19900`, then forces collection with zero-argument GC.start and prints `true`. [Differential scenarios](../features/garbage_collection.feature) also retain live aliases and pending block exits across explicit collection. The [memory contract](../docs/memory-management.md) separates compiled finite Ruby from the native sustained-allocation experiment.

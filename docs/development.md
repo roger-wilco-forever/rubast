@@ -23,7 +23,7 @@ The CLI supports `run`, `build FILE -o BIN`, `emit-rust FILE -o DIR`, and `dump-
 | Text I/O validation and runtime behavior | [`app/analysis/text_io.rb`](../app/analysis/text_io.rb), [`runtime/rubast_runtime/src/text_io.rs`](../runtime/rubast_runtime/src/text_io.rs), [`features/practical_io.feature`](../features/practical_io.feature); regenerate pinned Unicode inspection data with [`bin/generate-inspection-table`](../bin/generate-inspection-table) |
 | Supported Ruby semantics and diagnostics | [`app/analysis/validator.rb`](../app/analysis/validator.rb), [`app/analysis/namespaces.rb`](../app/analysis/namespaces.rb), [`app/analysis/modules.rb`](../app/analysis/modules.rb), [`app/analysis/visibility.rb`](../app/analysis/visibility.rb), [`app/analysis/registry_operations.rb`](../app/analysis/registry_operations.rb), [`app/analysis/loop_analysis.rb`](../app/analysis/loop_analysis.rb), [`app/analysis/collections.rb`](../app/analysis/collections.rb), [`app/analysis/hashes.rb`](../app/analysis/hashes.rb), [`app/analysis/iterators.rb`](../app/analysis/iterators.rb), [`app/analysis/arguments.rb`](../app/analysis/arguments.rb), [`app/analysis/call_arguments.rb`](../app/analysis/call_arguments.rb), [`app/analysis/block_arguments.rb`](../app/analysis/block_arguments.rb), [`app/analysis/blocks.rb`](../app/analysis/blocks.rb), [`app/analysis/exceptions.rb`](../app/analysis/exceptions.rb) |
 | Generated Rust and Cargo manifest | [`app/backend/rust.rb`](../app/backend/rust.rb), [`app/backend/namespaces.rb`](../app/backend/namespaces.rb), [`app/backend/iterators.rb`](../app/backend/iterators.rb), [`app/backend/blocks.rb`](../app/backend/blocks.rb), [`app/backend/exceptions.rb`](../app/backend/exceptions.rb), [`lib/rubast/generated_project.rb`](../lib/rubast/generated_project.rb) |
-| Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs), [`runtime/rubast_runtime/src/exceptions.rs`](../runtime/rubast_runtime/src/exceptions.rs) |
+| Generated program behavior | [`runtime/rubast_runtime/src/lib.rs`](../runtime/rubast_runtime/src/lib.rs), [`runtime/rubast_runtime/src/exceptions.rs`](../runtime/rubast_runtime/src/exceptions.rs), [`runtime/rubast_runtime/src/heap.rs`](../runtime/rubast_runtime/src/heap.rs) |
 | IR graph serialization and source mapping | [`app/debug/ir.rb`](../app/debug/ir.rb), [`app/backend/source_map.rb`](../app/backend/source_map.rb), [`features/compiler_artifacts.feature`](../features/compiler_artifacts.feature) |
 | Project files, binary destinations, and runtime copying | [`app/build/writer.rb`](../app/build/writer.rb) |
 | Cargo execution and build diagnostics | [`app/build/cargo.rb`](../app/build/cargo.rb), [`app/build/diagnostics.rb`](../app/build/diagnostics.rb), [`spec/build/cargo_spec.rb`](../spec/build/cargo_spec.rb) |
@@ -42,7 +42,7 @@ A new IR form may require changes in the normalizer, validator, emitter, and run
 | RSpec | A local pass decision or dependency wiring behaves as specified | Does not execute the generated binary |
 | Diagnostic Cucumber scenario | Unsupported input fails with a code and Ruby location | Does not establish support |
 | Differential Cucumber scenario | A generated binary matches pinned CRuby for the tested input, stdin, stdout, stderr, and exit status | Covers the stated example, not arbitrary Ruby |
-| Cargo tests | The Rust runtime crate builds and any Rust tests execute | There are currently zero Rust test assertions; generated behavior is covered by Cucumber |
+| Cargo tests | The Rust runtime crate builds and any Rust tests execute | Runtime reclamation assertions check roots, cycles, buffers, and slot reuse; generated behavior is covered by Cucumber |
 | RuboCop and Rust formatting | Source meets style gates | Does not establish semantics |
 
 Removing a diagnostic is a support claim. Use an example that distinguishes correct Ruby behavior from a likely wrong translation, such as EOF versus a normal input line, Unicode input, or a side effect that reveals evaluation order. The supported scenario must execute Rubast's output and compare it with CRuby. If the generated program cannot preserve the behavior, keep the diagnostic and document the gap. Do not normalize away a real mismatch.
@@ -61,7 +61,7 @@ bundle exec rspec spec/system/container_spec.rb
 bin/verify
 ```
 
-A focused test is useful while editing but does not replace the full local check. The current Cargo test command completes with zero Rust unit tests; it is a build check until runtime tests are added. CI is the hosted check for the pushed commit. Documentation-only changes do not require a new behavior test.
+A focused test is useful while editing but does not replace the full local check. Cargo also runs the heap reclamation tests; their object-count assertions supplement the differential execution scenarios. CI is the hosted check for the pushed commit. Documentation-only changes do not require a new behavior test.
 
 For a pull request, include the minimal Ruby repro, the acceptance or diagnostic scenario, commands actually run, and any remaining coverage gap. The [pull request template](../.github/pull_request_template.md) captures these items.
 

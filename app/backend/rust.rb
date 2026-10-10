@@ -228,6 +228,7 @@ module Rubast
 
         def emit_collection(node, lines)
           return emit_container(node, lines) if collection_node?(node)
+          return emit_value("{ runtime.collect_garbage(); Value::Nil }", lines) if node.family == :memory
 
           receiver = emit_value(emit_expression(node.receiver, lines), lines)
           arguments = node.arguments.map { |argument| emit_value(emit_expression(argument, lines), lines) }

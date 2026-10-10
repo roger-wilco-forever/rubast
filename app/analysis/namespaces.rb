@@ -257,12 +257,25 @@ module Rubast
 
       def validate_builtin_call(node, locals)
         validate_loading_call(node) if %i[require_relative require load autoload].include?(node.name)
+        memory = validate_memory_call(node)
+        return memory if memory
+
         return validate_declaration(node, locals) if declaration_call?(node)
         return validate_composition(node, locals) if composition_call?(node)
         return validate_kernel_call(node, locals) if node.receiver.nil? && %i[puts p print warn gets raise
                                                                               fail].include?(node.name)
 
         nil
+      end
+
+      def validate_memory_call(node)
+        receiver = node.receiver
+        return unless receiver.is_a?(IR::ConstantRead) || receiver.is_a?(IR::ConstantPath)
+        return unless constant_parts(receiver).first == [:GC] && !resolve_constant(receiver)
+
+        unsupported(node) unless node.name == :start && node.arguments.empty? && !node.safe_navigation
+        IR::Builtin.new(family: :memory, name: :start, receiver: IR::NilLiteral.new(span: receiver.span),
+                        arguments: [], result_type: :nil, span: node.span)
       end
 
       def validate_loading_call(node)

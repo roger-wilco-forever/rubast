@@ -274,11 +274,17 @@ Add selected String hash keys, traversal of variable-sized collections, and fres
 
 **Implemented selection:** literal String insertion keys and runtime String lookups; branch-dependent bounded array lengths with guarded each/map/times; fresh object/collection storage inside finite built-in iterators. Traversal length mutation, computed String insertion, and allocation under while/until remain diagnostics. Analysis budgets are 1,000 block validations, 10,000 bounded-body arena allocations, and 10,000 array slots. See [the contract](practical-collections.md), [order batch](../examples/workloads/order_batch.rb), [log batch](../examples/workloads/log_batch.rb), and [differential scenarios](../features/practical_collections.feature). **Verification:** final bin/verify passed: RuboCop (96 files), 6 RSpec examples, 1,031 Cucumber scenarios (3,621 steps), Rust formatting, and Cargo tests (zero runtime unit/doc assertions). Initial new support and the allocation ceiling failed before implementation; former finite-allocation boundaries retain their source and now execute against CRuby. Workload checks pin successful reference outputs as well as stdout/stderr/status comparisons. A retained release order binary matches CRuby for gift, ordinary input, and EOF; guarded semantic IR serialization and documentation links were checked separately. Performance benchmarks were not rerun.
 
-### 22. Memory management — planned
+### 22. Memory management — complete
 
 Reclaim unreachable arena objects while preserving aliases and cycles. Define roots across locals, fields, constants, calls, blocks, and pending exceptions/control exits; select the reclamation mechanism from measured long-running workloads.
 
 **Acceptance:** sustained allocation workloads show bounded retained memory when objects become unreachable. Reachable cyclic graphs retain identity and behavior; reclamation is checked separately from process RSS. Finalizers remain a separate contract.
+
+**Implemented:** a weak-token arena with strong Value handles counts direct incoming object edges, finds external roots, and performs iterative mark/sweep with reusable slots. Roots cover locals, constants/class state, receivers, captured blocks, evaluated arguments/allocation payloads, and pending Outcome/Flow values. Collection has a 256-allocation floor and scales with the live graph. Zero-argument GC.start returns nil and retains lexical user-name priority. Rust scope lifetime, high-water metadata, and existing finite analysis ceilings remain explicit boundaries. See [the memory contract](memory-management.md), [execution scenarios](../features/garbage_collection.feature), [runtime tests](../runtime/rubast_runtime/tests/garbage_collection.rs), and [compiled finite batch](../examples/workloads/memory_batch.rb).
+
+**Measured:** the identical native runtime harness compares retained stage-21 and stage-22 release projects on three shuffled peak-RSS samples per case. At 50,000 discarded mixed cycles, final arena retention falls from 150,001 objects to one root, automatic collection uses 259 slots, and median peak RSS falls from 248,608 to 2,696 KiB. The rooted 10,000-cycle control preserves all 30,001 objects and increases peak RSS by 3.1%. [Raw samples](../benchmarks/results/2026-10-10-memory-final.json) include instrumentation, source/binary hashes, versions, flags, and checkpoints. This measures native runtime reclamation; it does not accept unbounded Ruby allocation or claim a speed gain.
+
+**Verification:** Final bin/verify passed: RuboCop (97 files), 6 RSpec examples, 1,047 Cucumber scenarios (3,677 steps), Rust formatting, and seven Cargo reclamation tests. The initial six new differential scenarios failed before implementation. The final focused feature passes 16 scenarios and 56 steps. Retained release Ruby output matches CRuby; semantic IR graph references, the memory Builtin, benchmark artifact/source hashes, and documentation links were checked separately. Stage 18/20 timings and CRuby memory were not remeasured.
 
 ### 23. Closures — planned
 
@@ -294,4 +300,4 @@ Build on closures to add selected define_method, computed send selectors, and ad
 
 ## Next action
 
-Stage 21 is complete. Next implement stage 22: select a reclamation mechanism, define roots across calls/blocks/exits, and verify reachable aliases and cycles while measuring retained memory. Complete its checks, documentation, commit, and push before starting stage 23.
+Stage 22 is complete. Next implement stage 23: select Proc/lambda and retained-block shapes, specify captured state/lifetime and exit/arity rules, and add CRuby comparisons before expanding the current literal-block contract. Complete its checks, documentation, commit, and push before starting stage 24.
